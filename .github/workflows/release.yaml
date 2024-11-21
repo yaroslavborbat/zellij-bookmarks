@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-wasip1
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Generate SHA256 checksum
+        run: sha256sum ./target/wasm32-wasip1/release/zellij-bookmarks.wasm > ./target/wasm32-wasip1/release/zellij-bookmarks.wasm.sha256
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref }}
+          files: |
+            ./target/wasm32-wasip1/release/zellij-bookmarks.wasm
+            ./target/wasm32-wasip1/release/zellij-bookmarks.wasm.sha256
+          fail_on_unmatched_files: true
+          generate_release_notes: true

@@ -1,0 +1,34 @@
+version: "3"
+
+silent: true
+
+vars:
+  INSTALL_DIR: ~/.config/zellij/plugins
+
+tasks:
+  lint:
+    desc: "Lint"
+    cmds:
+      - cargo clippy --all-targets -- -D warnings
+      - cargo fmt --all -- --check
+
+  audit:
+    desc: "Audit"
+    cmd: cargo audit
+
+  build:
+    desc: "Build zellij-bookmarks plugin"
+    cmds:
+      - cargo build --release
+
+  install:
+    desc: "Install zellij-bookmarks plugin"
+    cmds:
+      - mkdir -p {{ .INSTALL_DIR }}
+      - cp target/wasm32-wasip1/release/zellij-bookmarks.wasm {{ .INSTALL_DIR }}/
+
+  build-install:
+    desc: "Build and install zellij-bookmarks plugin"
+    cmds:
+      - task: build
+      - task: install
