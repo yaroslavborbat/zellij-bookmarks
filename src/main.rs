@@ -371,8 +371,7 @@ impl ZellijPlugin for State {
 
                     should_render = true;
                 }
-                // Enter
-                BareKey::Char('\n') => {
+                BareKey::Enter => {
                     if self.view_labels {
                         self.filter_by_label = true;
                         self.filter = match self.labels_mgr.get_selected() {
