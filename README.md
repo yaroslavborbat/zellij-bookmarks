@@ -31,7 +31,9 @@ A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly insert
 
 ### From Source
 
-1. Install Rust and Cargo if you haven't already. Follow the installation guide [here](https://www.rust-lang.org/tools/install).
+1. Install Rust and Cargo if you haven't already. Follow the [installation guide here](https://www.rust-lang.org/tools/install).
+
+   Additionally, install the `wasm32-wasip1` target by following the [documentation here](https://doc.rust-lang.org/nightly/rustc/platform-support/wasm32-wasip1.html).
 2. Clone the repository:
    ```bash
    git clone https://github.com/yaroslavborbat/zellij-bookmarks.git
@@ -49,7 +51,7 @@ A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly insert
 For a quick installation, run the following command to download the plugin directly:
 ```bash
 mkdir -p ~/.config/zellij/plugins && \
-  curl -L "https://github.com/yaroslavborbat/zellij-bookmarks/releases/latest/download/zellij-bookmarks.wasm" -o ~/.config/zellij/plugins/zellij-bookmarks.wasm
+curl -L "https://github.com/yaroslavborbat/zellij-bookmarks/releases/latest/download/zellij-bookmarks.wasm" -o ~/.config/zellij/plugins/zellij-bookmarks.wasm
 ```
 > **Note**: You don't need to keep zellij-bookmarks.wasm at this specified location. It's just where I like to keep my zellij plugins.
 
@@ -65,12 +67,14 @@ shared_except "locked" {
     bind "Alt M" {
         LaunchOrFocusPlugin "file:~/.config/zellij/plugins/zellij-bookmarks.wasm" {
             floating true
-            cwd "/home/$USER/.config/zellij/"
+            cwd "/home/<USER>/.config/zellij/"
         };
     }
 }
 ```
 > **Note**: You likely already have a `shared_except "locked"` section in your configuration. Add the `bind` command there.
+
+> **Note**: Make sure to replace \<USER\> in the cwd path with your actual username.
 
 #### Parameters
 
@@ -91,15 +95,15 @@ The bookmarks configuration is a YAML file that defines your bookmarks. Each boo
 #### Example Configuration:
 ```yaml
 bookmarks: 
-  - name: "Bookmark #1"
-    command: "echo 'Your command #1'"
-    exec: true
-    label: echo
-  - name: "Bookmark #2"
-    command: |
-      echo 'Your command #2'
-    exec: false
-    label: echo
+- name: "Bookmark #1"
+  command: "echo 'Your command #1'"
+  exec: true
+  label: echo
+- name: "Bookmark #2"
+  command: |
+    echo 'Your command #2'
+  exec: false
+  label: echo
 ```
 ---
 ## 🤝 Contributing
