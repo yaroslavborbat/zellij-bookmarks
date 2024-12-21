@@ -4,7 +4,7 @@ A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly insert
 
 ![demo](assets/demo.gif)
 
-### ✨ Features
+## ✨ Features
 
 - **Easily create and manage command bookmarks**:  
   Create, edit, and organize bookmarks with ease to manage your most common terminal commands.
