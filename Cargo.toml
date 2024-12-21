@@ -1,6 +1,6 @@
 [package]
 name = "zellij-bookmarks"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
 
@@ -9,4 +9,5 @@ owo-colors = "4.1.0"
 serde = { version = "1.0.214", features = ["derive"] }
 serde_yaml = "0.9.34"
 zellij-tile = "0.41.2"
-zellij-utils = "0.41.2"
+num_enum = "0.7.3"
+handlebars = "6.2.0"

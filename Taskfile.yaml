@@ -4,6 +4,8 @@ silent: true
 
 vars:
   INSTALL_DIR: ~/.config/zellij/plugins
+  PLUGIN_FILE: "zellij-bookmarks.wasm"
+  DEV_SUFFIX: "-dev"
 
 tasks:
   lint:
@@ -12,9 +14,15 @@ tasks:
       - cargo clippy --all-targets -- -D warnings
       - cargo fmt --all -- --check
 
+  fmt:
+    desc: "Fmt"
+    cmds:
+      - cargo fmt --all
+
   audit:
     desc: "Audit"
-    cmd: cargo audit
+    cmds:
+      - cargo audit
 
   build:
     desc: "Build zellij-bookmarks plugin"
@@ -25,10 +33,22 @@ tasks:
     desc: "Install zellij-bookmarks plugin"
     cmds:
       - mkdir -p {{ .INSTALL_DIR }}
-      - cp target/wasm32-wasip1/release/zellij-bookmarks.wasm {{ .INSTALL_DIR }}/
+      - cp target/wasm32-wasip1/release/{{ .PLUGIN_FILE }} {{ .INSTALL_DIR }}/
+
+  install-dev:
+    desc: "Install dev zellij-bookmarks plugin"
+    cmds:
+      - mkdir -p {{ .INSTALL_DIR }}
+      - cp target/wasm32-wasip1/release/{{ .PLUGIN_FILE }} {{ .INSTALL_DIR }}/{{ .PLUGIN_FILE | replace ".wasm" (print .DEV_SUFFIX ".wasm") }}
 
   build-install:
     desc: "Build and install zellij-bookmarks plugin"
     cmds:
       - task: build
       - task: install
+
+  build-install-dev:
+    desc: "Build and install dev zellij-bookmarks plugin"
+    cmds:
+      - task: build
+      - task: install-dev
