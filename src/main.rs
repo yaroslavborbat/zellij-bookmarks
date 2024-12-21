@@ -1,19 +1,27 @@
 mod filters;
+mod keybindings;
+mod render;
 mod tab_manager;
 
 use crate::filters::{BookmarkFilter, Filter, LabelFilter};
+use crate::keybindings::{Keybinding, Keybindings};
 use crate::tab_manager::TabManager;
+
+use handlebars::Handlebars;
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
-use std::fmt::Debug;
-use std::io;
+use std::cmp::PartialEq;
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::{Debug, Formatter};
 use std::io::{Read, Write};
+use std::{fmt, io};
 use std::{fs, path};
 use zellij_tile::prelude::*;
 
 const CONFIGURATION_EXEC: &str = "exec";
 const CONFIGURATION_IGNORE_CASE: &str = "ignore_case";
+const CONFIGURATION_AUTODETECT_FILTER_MODE: &str = "autodetect_filter_mode";
 const CONFIGURATION_FILENAME: &str = "filename";
 
 const CWD: &str = "/host";
@@ -27,53 +35,167 @@ type Bookmarks = Vec<Bookmark>;
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 struct Bookmark {
+    #[serde(default)]
+    id: usize,
     name: String,
-    command: String,
     #[serde(default)]
-    label: String,
+    desc: String,
+    cmds: Vec<String>,
     #[serde(default)]
+    labels: Vec<String>,
+    #[serde(default)]
+    vars: HashMap<String, String>,
     exec: Option<bool>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, Clone)]
 struct Config {
+    #[serde(default)]
+    vars: HashMap<String, String>,
+    #[serde(default)]
+    cmds: HashMap<String, String>,
+    #[serde(deserialize_with = "deserialize_bookmarks")]
     bookmarks: Bookmarks,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
+struct Label {
+    id: usize,
+    name: String,
+}
+
+impl Label {
+    fn new(id: usize, name: String) -> Self {
+        Self { id, name }
+    }
+}
+
+fn deserialize_bookmarks<'de, D>(deserializer: D) -> Result<Bookmarks, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let bookmarks: Vec<Bookmark> = Vec::deserialize(deserializer)?;
+    let mut result: Vec<Bookmark> = Vec::new();
+    let mut uniq: HashSet<String> = HashSet::new();
+    let mut duplicate_count = 0;
+
+    for (i, mut bookmark) in bookmarks.into_iter().enumerate() {
+        if !uniq.insert(bookmark.name.clone()) {
+            duplicate_count += 1;
+        } else {
+            bookmark.id = i + 1;
+            result.push(bookmark);
+        }
+    }
+
+    if duplicate_count > 0 {
+        return Err(serde::de::Error::custom(format!(
+            "Duplicate bookmarks names: {}",
+            duplicate_count
+        )));
+    }
+
+    Ok(result)
+}
+
 struct State {
+    mode: Mode,
     exec: bool,
     ignore_case: bool,
+    detect_filter_mode: bool,
     filename: String,
+    filter_mode: filters::Mode,
     filter: String,
     bookmarks_mgr: TabManager<Bookmark>,
-    labels_mgr: TabManager<String>,
-    filter_by_label: bool,
-    view_command: bool,
-    view_labels: bool,
-    view_usage: bool,
+    labels_mgr: TabManager<Label>,
+    config: Config,
+    keybindings: Keybindings,
+    view_desc: bool,
     crit_error_message: Option<String>,
     error_message: Option<String>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            mode: Default::default(),
+            exec: false,
+            ignore_case: true,
+            detect_filter_mode: true,
+            filename: ".zellij_bookmarks.yaml".to_string(),
+            filter_mode: Default::default(),
+            filter: "".to_string(),
+            bookmarks_mgr: Default::default(),
+            labels_mgr: Default::default(),
+            config: Default::default(),
+            keybindings: Default::default(),
+            view_desc: false,
+            crit_error_message: None,
+            error_message: None,
+        }
+    }
+}
+
+#[derive(Default, PartialEq, Debug, TryFromPrimitive, IntoPrimitive, Clone, Copy)]
+#[repr(u32)]
+enum Mode {
+    #[default]
+    Bookmarks = 1,
+    Labels = 2,
+    Usage = 3,
+}
+
+trait Navigation {
+    fn next(&self) -> Self;
+    fn prev(&self) -> Self;
+}
+
+impl Navigation for Mode {
+    fn next(&self) -> Mode {
+        let next = (*self as u32).saturating_add(1);
+        Mode::try_from(next).unwrap_or(Mode::Bookmarks)
+    }
+
+    fn prev(&self) -> Mode {
+        let prev = (*self as u32).saturating_sub(1);
+        Mode::try_from(prev).unwrap_or(Mode::Usage)
+    }
+}
+
+impl fmt::Display for Mode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::Bookmarks => "Bookmarks",
+            Self::Labels => "Labels",
+            Self::Usage => "Usage",
+        };
+        write!(f, "{}", name)
+    }
 }
 
 impl State {
     fn bookmark_filter(&self) -> Box<dyn Filter<Bookmark>> {
         Box::new(BookmarkFilter::new(
+            self.filter_mode,
             self.filter.clone(),
-            self.filter_by_label,
             self.ignore_case,
         ))
     }
 
-    fn label_filter(&self) -> Box<dyn Filter<String>> {
-        Box::new(LabelFilter::new(self.filter.clone(), self.ignore_case))
+    fn label_filter(&self) -> Box<dyn Filter<Label>> {
+        Box::new(LabelFilter::new(
+            self.filter_mode,
+            self.filter.clone(),
+            self.ignore_case,
+        ))
     }
 
     fn set_filter(&mut self) {
-        if self.view_labels {
-            self.labels_mgr.with_filter(self.label_filter());
+        match self.mode {
+            Mode::Bookmarks => self.bookmarks_mgr.with_filter(self.bookmark_filter()),
+            Mode::Labels => self.labels_mgr.with_filter(self.label_filter()),
+            _ => {}
         }
-        self.bookmarks_mgr.with_filter(self.bookmark_filter());
     }
 
     fn reset_selection(&mut self) {
@@ -93,7 +215,7 @@ impl State {
         let path = self.get_path();
         if !path.exists() {
             let conf: Config = Config::default();
-            let serialized = serde_yaml::to_string(&conf).expect("Failed to serialize bookmarks");
+            let serialized = serde_yaml::to_string(&conf).expect("Failed to serialize bookmarks.");
             let mut file = fs::File::create(&path)?;
             file.write_all(serialized.as_bytes())?;
         }
@@ -109,16 +231,24 @@ impl State {
         file.read_to_string(&mut content)?;
 
         let config: Config = serde_yaml::from_str(&content)?;
-        self.bookmarks_mgr = TabManager::new(config.bookmarks);
 
         let mut set = HashSet::new();
-
-        for (_, bookmark) in self.bookmarks_mgr.iter() {
-            if !bookmark.label.is_empty() {
-                set.insert(bookmark.label.clone());
+        let mut labels = Vec::new();
+        let mut label_id = 1;
+        for bookmark in config.bookmarks.iter() {
+            for label in bookmark.labels.iter() {
+                if set.insert(label.clone()) {
+                    labels.push(Label::new(label_id, label.clone()));
+                    label_id += 1;
+                };
             }
         }
-        self.labels_mgr = TabManager::new(set.into_iter().collect());
+
+        self.labels_mgr = TabManager::new(labels);
+
+        self.bookmarks_mgr = TabManager::new(config.bookmarks.clone());
+
+        self.config = config;
 
         Ok(())
     }
@@ -147,134 +277,214 @@ impl State {
         false
     }
 
-    fn render_usage(&self) -> bool {
-        if !self.view_usage {
-            return false;
-        }
-        render_mode(2, 0, "Usage".to_string());
+    fn render_usage(&self) {
+        render::render_mode(2, 0, Mode::Usage.to_string());
 
         let mut table = Table::new();
-        table = table.add_row(vec!["KeyBindings", "Action"]);
+
+        table = table.add_row(vec!["KeyBinding", "Action", "Mode", "Configurable"]);
+        // Non configurable
         table = table.add_row(vec![
-            "Ctrl + e",
-            "Open the bookmark configuration file for editing.",
+            format!(
+                "{}|{}",
+                BareKey::Esc,
+                Keybinding::new(KeyModifier::Ctrl, 'c')
+            )
+            .as_str(),
+            "Exit the zellij-bookmarks.",
+            "*",
+            "False",
         ]);
         table = table.add_row(vec![
-            "Ctrl + r",
-            "Reload bookmarks. Required after making changes to the bookmarks configuration.",
+            format!("{}|{} {}", BareKey::Tab, BareKey::Down, BareKey::Up).as_str(),
+            "Navigate through the list of bookmarks or labels.",
+            "*",
+            "False",
         ]);
         table = table.add_row(vec![
-            "Ctrl + f",
-            "Toggle filter modes (available only in bookmark mode).",
+            format!("{} {}", BareKey::Left, BareKey::Right).as_str(),
+            "Switch between modes.",
+            "*",
+            "False",
         ]);
         table = table.add_row(vec![
-            "Ctrl + l",
-            "Toggle between Bookmarks and Labels modes.",
+            BareKey::Backspace.to_string().as_str(),
+            "Remove the last character from the filter.",
+            format!("{}|{}", Mode::Bookmarks, Mode::Labels).as_str(),
+            "False",
         ]);
         table = table.add_row(vec![
-            "Ctrl + v",
-            "Display the command associated with the bookmark (only for bookmarks).",
+            BareKey::Enter.to_string().as_str(),
+            "Paste the selected bookmark into the terminal.",
+            Mode::Bookmarks.to_string().as_str(),
+            "False",
         ]);
-        table = table.add_row(vec!["Ctrl + u", "Display usage instructions."]);
+        table = table.add_row(vec![
+            BareKey::Enter.to_string().as_str(),
+            "Find all bookmarks associated with the selected label.",
+            Mode::Labels.to_string().as_str(),
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{:?} {}", KeyModifier::Ctrl, Mode::Bookmarks as u32).as_str(),
+            "Switch to Bookmarks mode.",
+            "*",
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{:?} {}", KeyModifier::Ctrl, Mode::Labels as u32).as_str(),
+            "Switch to Labels mode.",
+            "*",
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{:?} {}", KeyModifier::Ctrl, Mode::Usage as u32).as_str(),
+            "Switch to Usage mode to view instructions.",
+            "*",
+            "False",
+        ]);
+
+        // Configurable
+        table = table.add_row(vec![
+            self.keybindings.edit.to_string().as_str(),
+            "Open the bookmark configuration file in an editor.",
+            "*",
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.reload.to_string().as_str(),
+            "Reload bookmarks. Required after modifying the configuration file.",
+            "*",
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.switch_filter_label.to_string().as_str(),
+            "Switch to label filtering mode.",
+            Mode::Bookmarks.to_string().as_str(),
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.switch_filter_id.to_string().as_str(),
+            "Switch to id filtering mode.",
+            format!("{}|{}", Mode::Bookmarks, Mode::Labels).as_str(),
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.describe.to_string().as_str(),
+            "Show the description of the selected bookmark.",
+            Mode::Bookmarks.to_string().as_str(),
+            "True",
+        ]);
 
         print_table_with_coordinates(table, 2, 2, None, None);
-        true
     }
 
-    fn render_labels(&self, rows: usize, cols: usize) -> bool {
-        if !self.view_labels {
-            return false;
-        }
-        self.render_main_menu(
+    fn render_labels(&self, rows: usize, cols: usize) {
+        let iter = self.labels_mgr.iter().map(|(i, l)| (i, l.id, &l.name));
+        render::render_main_menu(
             rows,
             cols,
             self.labels_mgr.get_position(),
             self.labels_mgr.len(),
-            "Labels".to_string(),
-            false,
-            self.labels_mgr.iter(),
+            Mode::Labels.to_string(),
+            self.filter.clone(),
+            self.filter_mode.to_string(),
+            iter,
         );
-        true
     }
 
-    fn render_bookmarks(&self, rows: usize, cols: usize) -> bool {
+    fn render_bookmarks(&self, rows: usize, cols: usize) {
         let iter = self.bookmarks_mgr.iter().map(|(i, b)| {
-            if self.view_command {
-                (i, &b.command)
+            if self.view_desc {
+                (i, b.id, &b.desc)
             } else {
-                (i, &b.name)
+                (i, b.id, &b.name)
             }
         });
-        self.render_main_menu(
+        render::render_main_menu(
             rows,
             cols,
             self.bookmarks_mgr.get_position(),
             self.bookmarks_mgr.len(),
-            "Bookmarks".to_string(),
-            self.filter_by_label,
+            Mode::Bookmarks.to_string(),
+            self.filter.clone(),
+            self.filter_mode.to_string(),
             iter,
         );
-        true
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn render_main_menu<'a>(
+    fn gen_template_command(
         &self,
-        rows: usize,
-        cols: usize,
-        selected: usize,
-        length: usize,
-        mode: String,
-        filter_by_label: bool,
-        iterator: impl Iterator<Item = (usize, &'a String)>,
-    ) {
-        let (x, y, width, height) = self.main_menu_size(rows, cols);
+        bookmark: Bookmark,
+        processed: &mut HashSet<String>,
+    ) -> Result<String, String> {
+        let mut cmds: Vec<String> = Vec::new();
 
-        render_mode(x + 2, y, mode);
+        if !processed.insert(bookmark.name.clone()) {
+            return Err(format!(
+                "Circular dependency detected for bookmark '{}'",
+                bookmark.name
+            ));
+        }
 
-        render_search_block(x + 2, y + 1, self.filter.clone(), filter_by_label);
-
-        let (begin, end) = if selected >= height {
-            (selected + 1 - height, selected)
-        } else {
-            (0, height - 1)
-        };
-
-        render_right_counter(begin, width, y + 2);
-
-        {
-            let mut number = y + 3;
-
-            for (i, value) in iterator {
-                if i < begin {
-                    continue;
+        for cmd in bookmark.cmds.iter() {
+            if let Some(dep_bookmark_name) = cmd.strip_prefix("bookmark::") {
+                if let Some(dep_bookmark) = self
+                    .config
+                    .bookmarks
+                    .iter()
+                    .find(|b| b.name == dep_bookmark_name)
+                {
+                    let mut dep_bookmark = dep_bookmark.clone();
+                    dep_bookmark.vars.extend(bookmark.vars.clone());
+                    let cmds_from_dep_bookmark =
+                        self.gen_template_command(dep_bookmark, processed)?;
+                    cmds.push(cmds_from_dep_bookmark);
+                } else {
+                    return Err(format!("Bookmark '{}' not found", dep_bookmark_name));
                 }
-                if i > end {
-                    break;
+            } else if let Some(cmd_key) = cmd.strip_prefix("cmd::") {
+                if let Some(cmd_value) = self.config.cmds.get(cmd_key) {
+                    let rendered_cmd = self.gen_template_with_vars(cmd_value, &bookmark)?;
+                    cmds.push(rendered_cmd);
+                } else {
+                    return Err(format!("Command key '{}' not found in cmds", cmd_key));
                 }
-                let text = prepare_row_text(value.clone(), i + 1, width, selected == i);
-
-                print_text_with_coordinates(text, x, number, None, None);
-
-                number += 1;
+            } else {
+                let rendered_cmd = self.gen_template_with_vars(cmd, &bookmark)?;
+                cmds.push(rendered_cmd);
             }
         }
 
-        render_all_counter(x + 2, rows, length);
-
-        if length > end {
-            render_right_counter_with_max(length - 1 - end, length, width, rows);
-        }
+        Ok(cmds.join(" \\\n&& "))
     }
 
-    fn main_menu_size(&self, rows: usize, cols: usize) -> (usize, usize, usize, usize) {
-        // x, y, width, height
-        let width = cols;
-        let x = 0;
-        let y = 0;
-        let height = rows.saturating_sub(RESERVE_ROW_COUNT);
+    fn gen_template_with_vars(
+        &self,
+        template: &str,
+        bookmark: &Bookmark,
+    ) -> Result<String, String> {
+        let handlebars = Handlebars::new();
+        let mut vars = self.config.vars.clone();
+        vars.extend(bookmark.vars.clone());
 
-        (x, y, width, height)
+        handlebars
+            .render_template(template, &vars)
+            .map(|s| s.trim_start().trim_end().to_string())
+            .map_err(|e| format!("Template rendering error: {}", e))
+    }
+
+    fn gen_command(&self, bookmark: &Bookmark) -> Result<String, String> {
+        let mut processed = HashSet::new();
+        let mut cmd = self.gen_template_command(bookmark.clone(), &mut processed)?;
+
+        let exec = bookmark.exec.unwrap_or(self.exec);
+
+        if exec {
+            cmd.push('\n');
+        }
+
+        Ok(cmd)
     }
 }
 
@@ -296,7 +506,6 @@ impl ZellijPlugin for State {
             })
         }
 
-        self.ignore_case = true;
         if let Some(value) = configuration.get(CONFIGURATION_IGNORE_CASE) {
             self.ignore_case = value.trim().parse::<bool>().unwrap_or_else(|_| {
                 self.handle_error(
@@ -306,7 +515,15 @@ impl ZellijPlugin for State {
             })
         }
 
-        self.filename = ".zellij_bookmarks.yaml".to_string();
+        if let Some(value) = configuration.get(CONFIGURATION_AUTODETECT_FILTER_MODE) {
+            self.detect_filter_mode = value.trim().parse::<bool>().unwrap_or_else(|_| {
+                self.handle_error(
+                    format!("'{CONFIGURATION_AUTODETECT_FILTER_MODE}' config value must be 'true' or 'false', but it's '{value}'. The true is used.")
+                );
+                true
+            })
+        }
+
         if let Some(value) = configuration.get(CONFIGURATION_FILENAME) {
             if !value.is_empty() {
                 self.filename = value.clone();
@@ -314,15 +531,25 @@ impl ZellijPlugin for State {
         }
 
         if let Err(e) = self.create_config_if_not_exists() {
-            self.handle_crit_error(format!("failed to create file '{}': {}", self.filename, e));
+            self.handle_crit_error(format!("Failed to create file '{}': {}.", self.filename, e));
         }
 
         if let Err(e) = self.load_config() {
             self.handle_error(format!(
-                "failed to load config file '{}': {}",
+                "Failed to load config file '{}': {}.",
                 self.filename, e
             ));
         }
+
+        match Keybindings::new(configuration) {
+            Ok(kb) => self.keybindings = kb,
+            Err(e) => {
+                self.handle_error(format!(
+                    "Failed to parse zellij-bookmarks keybindings, check your config: {}. Default is used.", e
+                ));
+            }
+        }
+
         subscribe(&[EventType::Key]);
     }
 
@@ -336,121 +563,172 @@ impl ZellijPlugin for State {
                 BareKey::Char('c') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
                     close_focus();
                 }
-                BareKey::Down | BareKey::Tab => {
-                    if self.view_labels {
-                        self.labels_mgr.select_down();
-                    } else {
+                BareKey::Down | BareKey::Tab => match self.mode {
+                    Mode::Bookmarks => {
                         self.bookmarks_mgr.select_down();
+                        should_render = true;
                     }
-
+                    Mode::Labels => {
+                        self.labels_mgr.select_down();
+                        should_render = true;
+                    }
+                    _ => {}
+                },
+                BareKey::Up => match self.mode {
+                    Mode::Bookmarks => {
+                        self.bookmarks_mgr.select_up();
+                        should_render = true;
+                    }
+                    Mode::Labels => {
+                        self.labels_mgr.select_up();
+                        should_render = true;
+                    }
+                    _ => {}
+                },
+                BareKey::Right => {
+                    self.mode = self.mode.next();
+                    self.filter_mode = filters::Mode::default();
+                    self.set_filter();
                     should_render = true;
                 }
-                BareKey::Up => {
-                    if self.view_labels {
-                        self.labels_mgr.select_up();
-                    } else {
-                        self.bookmarks_mgr.select_up();
-                    }
-
+                BareKey::Left => {
+                    self.mode = self.mode.prev();
+                    self.filter_mode = filters::Mode::default();
+                    self.set_filter();
                     should_render = true;
                 }
                 BareKey::Char(c)
-                    if !key.has_modifiers(&[KeyModifier::Ctrl])
-                        && (c.is_ascii_alphabetic() || c.is_ascii_digit()) =>
+                    if key.has_modifiers(&[KeyModifier::Ctrl]) && c.is_ascii_digit() =>
                 {
-                    self.filter.push(c);
-
-                    self.set_filter();
-
-                    should_render = true;
+                    if let Some(digit) = c.to_digit(10) {
+                        if let Ok(mode) = Mode::try_from(digit) {
+                            if self.mode != mode {
+                                self.mode = mode;
+                                self.filter_mode = filters::Mode::default();
+                                self.set_filter();
+                                should_render = true;
+                            }
+                        }
+                    }
                 }
-                BareKey::Backspace => {
-                    self.filter.pop();
+                BareKey::Char(c) if key.has_no_modifiers() => match self.mode {
+                    Mode::Bookmarks | Mode::Labels => {
+                        if self.detect_filter_mode && self.filter.is_empty() {
+                            if c.is_ascii_digit() {
+                                self.filter_mode = filters::Mode::ID
+                            } else if self.filter_mode == filters::Mode::ID {
+                                self.filter_mode = filters::Mode::Name
+                            }
+                        }
+                        match self.filter_mode {
+                            filters::Mode::ID => {
+                                if let Some(digit) = c.to_digit(10) {
+                                    if !self.filter.is_empty() || digit > 0 {
+                                        self.filter.push(c);
 
-                    self.set_filter();
+                                        self.set_filter();
 
-                    should_render = true;
-                }
-                BareKey::Enter => {
-                    if self.view_labels {
-                        self.filter_by_label = true;
-                        self.filter = match self.labels_mgr.get_selected() {
-                            Some(label) => label.clone(),
-                            None => String::new(),
-                        };
-                        self.view_labels = false;
-                        self.view_command = false;
+                                        should_render = true;
+                                    }
+                                }
+                            }
+                            _ => {
+                                self.filter.push(c);
+
+                                self.set_filter();
+
+                                should_render = true;
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                BareKey::Backspace => match self.mode {
+                    Mode::Bookmarks | Mode::Labels => {
+                        self.filter.pop();
 
                         self.set_filter();
 
                         should_render = true;
-                    } else {
-                        let bookmark = match self.bookmarks_mgr.get_selected() {
-                            Some(bookmark) => bookmark,
-                            None => return true,
+                    }
+                    _ => {}
+                },
+                BareKey::Enter => match self.mode {
+                    Mode::Bookmarks => {
+                        match self.bookmarks_mgr.get_selected() {
+                            Some(bookmark) => match self.gen_command(bookmark) {
+                                Ok(cmd) => {
+                                    close_focus();
+                                    write_chars(cmd.as_str());
+                                }
+                                Err(err) => {
+                                    self.handle_error(format!(
+                                        "Failed to generate command: {}",
+                                        err
+                                    ));
+                                    should_render = true;
+                                }
+                            },
+                            None => should_render = true,
                         };
-                        let mut cmd = bookmark
-                            .command
-                            .trim_start_matches('\n')
-                            .trim_end_matches('\n')
-                            .to_string();
-
-                        let exec = match bookmark.exec {
-                            Some(value) => value,
-                            None => self.exec,
+                    }
+                    Mode::Labels => {
+                        self.filter_mode = filters::Mode::Label;
+                        self.filter = match self.labels_mgr.get_selected() {
+                            Some(label) => label.name.clone(),
+                            None => String::new(),
                         };
+                        self.mode = Mode::Bookmarks;
+                        self.view_desc = false;
 
-                        if exec {
-                            cmd.push('\n');
+                        self.set_filter();
+
+                        should_render = true;
+                    }
+                    _ => {}
+                },
+                _ => {
+                    // Configurable keys
+                    if self.keybindings.edit.matches(&key) {
+                        let file = FileToOpen::new(self.filename.as_str()).with_cwd(self.get_cwd());
+                        open_file_in_place(file, Default::default());
+                    } else if self.keybindings.reload.matches(&key) {
+                        if let Err(e) = self.load_config() {
+                            self.handle_error(format!(
+                                "Failed to load config file '{}': {}.",
+                                self.get_path().display(),
+                                e
+                            ));
                         }
-                        close_focus();
 
-                        write_chars(cmd.as_str());
+                        self.filter = "".to_string();
+
+                        self.reset_selection();
+
+                        should_render = true;
+                    } else if self.keybindings.switch_filter_label.matches(&key) {
+                        if self.mode == Mode::Bookmarks {
+                            self.filter_mode = self.filter_mode.switch_to(filters::Mode::Label);
+                            self.set_filter();
+                            should_render = true;
+                        }
+                    } else if self.keybindings.switch_filter_id.matches(&key) {
+                        match self.mode {
+                            Mode::Bookmarks | Mode::Labels => {
+                                self.filter_mode = self.filter_mode.switch_to(filters::Mode::ID);
+                                self.set_filter();
+                                should_render = true;
+                            }
+                            _ => {}
+                        }
+                    } else if self.keybindings.describe.matches(&key) {
+                        #[allow(clippy::collapsible_if)]
+                        if self.mode == Mode::Bookmarks {
+                            self.view_desc = !self.view_desc;
+                            should_render = true;
+                        }
                     }
                 }
-                // Configurable keys
-                BareKey::Char('e') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
-                    let file = FileToOpen::new(self.filename.as_str()).with_cwd(self.get_cwd());
-                    open_file_in_place(file, Default::default());
-                }
-                BareKey::Char('r') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
-                    if let Err(e) = self.load_config() {
-                        self.handle_error(format!(
-                            "failed to load config file '{}': {}",
-                            self.get_path().display(),
-                            e
-                        ));
-                    }
-
-                    self.filter = "".to_string();
-
-                    self.reset_selection();
-
-                    should_render = true;
-                }
-                BareKey::Char('f') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
-                    self.filter_by_label = !self.filter_by_label;
-
-                    should_render = true;
-                }
-                BareKey::Char('l') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
-                    self.view_labels = !self.view_labels;
-
-                    self.set_filter();
-
-                    should_render = true;
-                }
-                BareKey::Char('v') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
-                    self.view_command = !self.view_command;
-
-                    should_render = true;
-                }
-                BareKey::Char('u') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
-                    self.view_usage = !self.view_usage;
-
-                    should_render = true;
-                }
-                _ => (),
             }
         };
 
@@ -461,8 +739,8 @@ impl ZellijPlugin for State {
         if rows < RESERVE_ROW_COUNT || cols < RESERVE_COLUMN_COUNT {
             eprintln!(
                 "\
-                ERROR: Rendering failed. The panel is too small. \
-                The number of rows must be more than {RESERVE_ROW_COUNT}, but it's '{rows}. \
+                ERROR: Rendering failed. The panel is too small.\
+                The number of rows must be more than {RESERVE_ROW_COUNT}, but it's '{rows}.\
                 The number of columns must be more than {RESERVE_COLUMN_COUNT}, but it's '{cols}"
             );
             close_focus()
@@ -470,78 +748,18 @@ impl ZellijPlugin for State {
         if self.render_errors() {
             return;
         }
-        if self.render_usage() {
-            return;
+        match self.mode {
+            Mode::Bookmarks => {
+                self.render_bookmarks(rows, cols);
+            }
+            Mode::Labels => {
+                self.render_labels(rows, cols);
+            }
+            Mode::Usage => {
+                self.render_usage();
+            }
         }
-        if self.render_labels(rows, cols) {
-            return;
-        }
-        self.render_bookmarks(rows, cols);
     }
 }
 
 register_plugin!(State);
-
-fn prepare_row_text(row: String, position: usize, max_length: usize, selected: bool) -> Text {
-    let truncated_row = {
-        let formatted = format!("{}. {}", position, row);
-        if formatted.len() > max_length {
-            let truncated_len = max_length.saturating_sub(3);
-            let mut truncated_str = formatted.chars().take(truncated_len).collect::<String>();
-            truncated_str.push_str("...");
-            truncated_str
-        } else {
-            formatted
-        }
-    };
-    let text = if selected {
-        Text::new(truncated_row.yellow().to_string()).selected()
-    } else {
-        Text::new(truncated_row)
-    };
-    text
-}
-
-fn render_mode(x: usize, y: usize, mode: String) {
-    let s = format!("Mode: {}", mode);
-    let text = Text::new(s).color_range(BASE_COLOR, ..4);
-    print_text_with_coordinates(text, x, y, None, None)
-}
-
-fn render_search_block(x: usize, y: usize, filter: String, filter_by_label: bool) {
-    let search = if filter_by_label {
-        "Search (by label):".to_string()
-    } else {
-        "Search (by name):".to_string()
-    };
-    let filter = format!("{} {}_", search, filter.clone());
-
-    let text = Text::new(filter).color_range(BASE_COLOR, ..6);
-    print_text_with_coordinates(text, x, y, None, None);
-}
-
-// Render row with All row-counter
-fn render_all_counter(x: usize, y: usize, all: usize) {
-    let all_count = format!("All: {}", all);
-    let text = Text::new(all_count).color_range(BASE_COLOR, ..);
-    print_text_with_coordinates(text, x, y, None, None);
-}
-
-// Render row with right counter with max
-fn render_right_counter_with_max(count: usize, max_count: usize, width: usize, y: usize) {
-    if count == max_count {
-        return;
-    }
-    render_right_counter(count, width, y);
-}
-
-// Render row with right counter
-fn render_right_counter(count: usize, width: usize, y: usize) {
-    if count == 0 {
-        return;
-    }
-    let row = format!("+ {} more  ", count);
-    let x = width - row.len();
-    let text = Text::new(row.yellow().bold().to_string());
-    print_text_with_coordinates(text, x, y, None, None);
-}

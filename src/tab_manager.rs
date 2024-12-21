@@ -49,8 +49,12 @@ impl<T: Clone> TabManager<T> {
     }
 
     pub(crate) fn with_filter(&mut self, f: Box<dyn Filter<T>>) {
-        self.items = self.origin.clone();
-        self.items.retain(|item| f.keep(item));
+        self.items = self
+            .origin
+            .iter()
+            .filter(|item| f.keep(item))
+            .cloned()
+            .collect();
         self.reset_selection();
     }
 
