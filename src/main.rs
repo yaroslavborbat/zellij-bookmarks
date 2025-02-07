@@ -148,6 +148,7 @@ enum Mode {
 trait Navigation {
     fn next(&self) -> Self;
     fn prev(&self) -> Self;
+    fn iter() -> impl Iterator<Item = Self>;
 }
 
 impl Navigation for Mode {
@@ -159,6 +160,10 @@ impl Navigation for Mode {
     fn prev(&self) -> Mode {
         let prev = (*self as u32).saturating_sub(1);
         Mode::try_from(prev).unwrap_or(Mode::Usage)
+    }
+
+    fn iter() -> impl Iterator<Item = Self> {
+        (1..=3).filter_map(|v| Mode::try_from(v).ok())
     }
 }
 
@@ -278,7 +283,7 @@ impl State {
     }
 
     fn render_usage(&self) {
-        render::render_mode(2, 0, Mode::Usage.to_string());
+        render::render_mode(2, 0, Mode::Usage);
 
         let mut table = Table::new();
 
@@ -386,7 +391,7 @@ impl State {
             cols,
             self.labels_mgr.get_position(),
             self.labels_mgr.len(),
-            Mode::Labels.to_string(),
+            Mode::Labels,
             self.filter.clone(),
             self.filter_mode.to_string(),
             iter,
@@ -406,7 +411,7 @@ impl State {
             cols,
             self.bookmarks_mgr.get_position(),
             self.bookmarks_mgr.len(),
-            Mode::Bookmarks.to_string(),
+            Mode::Bookmarks,
             self.filter.clone(),
             self.filter_mode.to_string(),
             iter,

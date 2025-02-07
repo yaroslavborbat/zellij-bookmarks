@@ -1,4 +1,4 @@
-use crate::{BASE_COLOR, RESERVE_ROW_COUNT};
+use crate::{Mode, Navigation, BASE_COLOR, RESERVE_ROW_COUNT};
 use owo_colors::OwoColorize;
 use zellij_tile::prelude::*;
 
@@ -8,7 +8,7 @@ pub(crate) fn render_main_menu<'a>(
     cols: usize,
     selected: usize,
     count: usize,
-    mode: String,
+    mode: Mode,
     filter: String,
     filter_by: String,
     iterator: impl Iterator<Item = (usize, usize, &'a String)>,
@@ -82,10 +82,22 @@ fn prepare_row_text(row: String, id: usize, max_length: usize, selected: bool) -
     text
 }
 
-pub(crate) fn render_mode(x: usize, y: usize, mode: String) {
-    let s = format!("Mode: {}", mode);
-    let text = Text::new(s).color_range(BASE_COLOR, ..4);
-    print_text_with_coordinates(text, x, y, None, None)
+pub(crate) fn render_mode(x: usize, y: usize, mode: Mode) {
+    let text_mode = Text::new("Mode: [").color_range(BASE_COLOR, .. 5);
+    print_text_with_coordinates(text_mode, x, y, None, None);
+
+    let mut shift = 7;
+
+    Mode::iter().for_each(|m| {
+        let mut t = Text::new(m.to_string());
+        if m == mode {
+            t = t.color_range(BASE_COLOR, ..);
+        };
+
+        print_text_with_coordinates(t, x + shift, y, None, None);
+        shift += m.to_string().len() + 1;
+    });
+    print_text_with_coordinates(Text::new("]"), x + shift - 1, y, None, None);
 }
 
 fn render_search_block(x: usize, y: usize, filter: String, filter_by: String) {
