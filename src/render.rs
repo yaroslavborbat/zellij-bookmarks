@@ -83,7 +83,7 @@ fn prepare_row_text(row: String, id: usize, max_length: usize, selected: bool) -
 }
 
 pub(crate) fn render_mode(x: usize, y: usize, mode: Mode) {
-    let text_mode = Text::new("Mode: [").color_range(BASE_COLOR, .. 5);
+    let text_mode = Text::new("Mode: [").color_range(BASE_COLOR, ..5);
     print_text_with_coordinates(text_mode, x, y, None, None);
 
     let mut shift = 7;
