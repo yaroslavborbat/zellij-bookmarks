@@ -303,7 +303,7 @@ impl State {
         table = table.add_row(vec![
             format!("{}|{} {}", BareKey::Tab, BareKey::Down, BareKey::Up).as_str(),
             "Navigate through the list of bookmarks or labels.",
-            "*",
+            format!("{}|{}", Mode::Bookmarks, Mode::Labels).as_str(),
             "False",
         ]);
         table = table.add_row(vec![
