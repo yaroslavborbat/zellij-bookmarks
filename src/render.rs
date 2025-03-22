@@ -75,7 +75,7 @@ fn prepare_row_text(row: String, id: usize, max_length: usize, selected: bool) -
         }
     };
     let text = if selected {
-        Text::new(truncated_row.yellow().to_string()).selected()
+        Text::new(truncated_row).selected().color_range(0, ..)
     } else {
         Text::new(truncated_row)
     };
