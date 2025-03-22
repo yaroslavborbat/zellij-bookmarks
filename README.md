@@ -44,6 +44,8 @@ A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly insert
 
 ## 🚀 Installation
 
+For compatibility details, including tested versions, see [COMPATIBILITY.md](COMPATIBILITY.md).
+
 ### From Source
 
 1. Install Rust and Cargo if you haven't already. Follow the [installation guide here](https://www.rust-lang.org/tools/install).
@@ -85,6 +87,8 @@ shared_except "locked" {
 > **Note**: You likely already have a `shared_except "locked"` section in your configuration. Add the `bind` command there.
 
 > **Note**: Make sure to replace \<USER\> in the cwd path with your actual username.
+
+> **Important**: The cwd parameter is required. For details on why and what to do if it disappears after a Zellij update, see the [FAQ.md](FAQ.md).
 
 #### Parameters
 
