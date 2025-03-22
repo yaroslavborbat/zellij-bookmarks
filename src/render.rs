@@ -74,12 +74,11 @@ fn prepare_row_text(row: String, id: usize, max_length: usize, selected: bool) -
             formatted
         }
     };
-    let text = if selected {
+    if selected {
         Text::new(truncated_row).selected().color_range(0, ..)
     } else {
         Text::new(truncated_row)
-    };
-    text
+    }
 }
 
 pub(crate) fn render_mode(x: usize, y: usize, mode: Mode) {
