@@ -1,5 +1,4 @@
 use crate::{Mode, Navigation, BASE_COLOR, RESERVE_ROW_COUNT};
-use owo_colors::OwoColorize;
 use zellij_tile::prelude::*;
 
 #[allow(clippy::too_many_arguments)]
@@ -128,6 +127,6 @@ fn render_right_counter(count: usize, width: usize, y: usize) {
     }
     let row = format!("+ {} more  ", count);
     let x = width - row.len();
-    let text = Text::new(row.yellow().bold().to_string());
+    let text = Text::new(row).color_range(BASE_COLOR, ..);
     print_text_with_coordinates(text, x, y, None, None);
 }
