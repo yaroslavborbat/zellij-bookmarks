@@ -14,9 +14,9 @@ pub(crate) fn render_main_menu<'a>(
 ) {
     let (x, y, width, height) = main_menu_size(rows, cols);
 
-    render_mode(x + 2, y, mode);
+    render_mode(x, y, mode);
 
-    render_search_block(x + 2, y + 1, filter, filter_by);
+    render_search_block(x + 2, y + 2, filter, filter_by);
 
     let (begin, end) = if selected >= height {
         (selected + 1 - height, selected)
@@ -24,10 +24,10 @@ pub(crate) fn render_main_menu<'a>(
         (0, height - 1)
     };
 
-    render_right_counter(begin, width, y + 2);
+    render_right_counter(begin, width, y + 3);
 
     {
-        let mut number = y + 3;
+        let mut number = y + 4;
 
         for (i, id, value) in iterator {
             if i < begin {
@@ -81,25 +81,30 @@ fn prepare_row_text(row: String, id: usize, max_length: usize, selected: bool) -
 }
 
 pub(crate) fn render_mode(x: usize, y: usize, mode: Mode) {
-    let text_mode = Text::new("Mode: [").color_range(BASE_COLOR, ..5);
-    print_text_with_coordinates(text_mode, x, y, None, None);
+    let key_indication_text = format!("{}{}", BareKey::Left, BareKey::Right);
+    let mut shift = x + key_indication_text.chars().count() + 1;
 
-    let mut shift = 7;
+    print_text_with_coordinates(
+        Text::new(key_indication_text).color_range(3, ..).opaque(),
+        x,
+        y,
+        None,
+        None,
+    );
 
     Mode::iter().for_each(|m| {
         let mut t = Text::new(m.to_string());
         if m == mode {
-            t = t.color_range(BASE_COLOR, ..);
+            t = t.selected();
         };
 
-        print_text_with_coordinates(t, x + shift, y, None, None);
-        shift += m.to_string().len() + 1;
+        print_ribbon_with_coordinates(t, x + shift, y, None, None);
+        shift += m.to_string().len() + 4;
     });
-    print_text_with_coordinates(Text::new("]"), x + shift - 1, y, None, None);
 }
 
 fn render_search_block(x: usize, y: usize, filter: String, filter_by: String) {
-    let filter = format!("Search (by {}) {}_", filter_by, filter.clone());
+    let filter = format!("Search (by {}): {}_", filter_by, filter.clone());
 
     let text = Text::new(filter).color_range(BASE_COLOR, ..6);
     print_text_with_coordinates(text, x, y, None, None);

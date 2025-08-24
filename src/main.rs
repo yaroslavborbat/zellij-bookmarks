@@ -28,8 +28,8 @@ const CWD: &str = "/host";
 
 const BASE_COLOR: usize = 2;
 
-const RESERVE_ROW_COUNT: usize = 5;
-const RESERVE_COLUMN_COUNT: usize = 12;
+const RESERVE_ROW_COUNT: usize = 6;
+const RESERVE_COLUMN_COUNT: usize = 36;
 
 type Bookmarks = Vec<Bookmark>;
 
@@ -283,7 +283,7 @@ impl State {
     }
 
     fn render_usage(&self) {
-        render::render_mode(2, 0, Mode::Usage);
+        render::render_mode(0, 0, Mode::Usage);
 
         let mut table = Table::new();
 
