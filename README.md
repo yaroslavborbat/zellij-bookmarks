@@ -230,7 +230,7 @@ bookmarks:
 ## 🧩 More Zellij Plugins by Me
 
 - [`zellij-bookmarks`](https://github.com/yaroslavborbat/zellij-bookmarks) - A Zellij plugin for creating, managing, and quickly inserting command bookmarks into the terminal.
-- [`zellij-playbooks`](https://github.com/yaroslavborbat/zellij-playbooks) - A Zellij plugin for managing and executing playbook files.
+- [`zellij-playbooks`](https://github.com/yaroslavborbat/zellij-playbooks) - A Zellij plugin to browse, select, and execute commands from playbook files directly in the terminal.
 
 ---
 
