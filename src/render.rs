@@ -1,137 +1,179 @@
-use crate::{Mode, Navigation, BASE_COLOR, RESERVE_ROW_COUNT};
+use crate::core::keybinding_parser::Keybinding;
+use crate::core::{render_main_menu, render_mode, RESERVE_COLUMN_COUNT, RESERVE_ROW_COUNT};
 use zellij_tile::prelude::*;
 
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn render_main_menu<'a>(
-    rows: usize,
-    cols: usize,
-    selected: usize,
-    count: usize,
-    mode: Mode,
-    filter: String,
-    filter_by: String,
-    iterator: impl Iterator<Item = (usize, usize, &'a String)>,
-) {
-    let (x, y, width, height) = main_menu_size(rows, cols);
+use super::{Mode, Navigation, State};
 
-    render_mode(x, y, mode);
+impl State {
+    fn render_usage(&self) {
+        let all_modes: Vec<Mode> = Mode::iter().collect();
+        render_mode(0, 0, Mode::Usage, &all_modes);
 
-    render_search_block(x + 2, y + 2, filter, filter_by);
+        let mut table = Table::new();
 
-    let (begin, end) = if selected >= height {
-        (selected + 1 - height, selected)
-    } else {
-        (0, height - 1)
-    };
+        table = table.add_row(vec!["KeyBinding", "Action", "Mode", "Configurable"]);
+        // Non configurable
+        table = table.add_row(vec![
+            format!(
+                "{}|{}",
+                BareKey::Esc,
+                Keybinding::new(KeyModifier::Ctrl, 'c')
+            )
+            .as_str(),
+            "Exit the zellij-bookmarks.",
+            "*",
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{}|{} {}", BareKey::Tab, BareKey::Down, BareKey::Up).as_str(),
+            "Navigate through the list of bookmarks or labels.",
+            format!("{}|{}", Mode::Bookmarks, Mode::Labels).as_str(),
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{} {}", BareKey::Left, BareKey::Right).as_str(),
+            "Switch between modes.",
+            "*",
+            "False",
+        ]);
+        table = table.add_row(vec![
+            BareKey::Backspace.to_string().as_str(),
+            "Remove the last character from the filter.",
+            format!("{}|{}", Mode::Bookmarks, Mode::Labels).as_str(),
+            "False",
+        ]);
+        table = table.add_row(vec![
+            BareKey::Enter.to_string().as_str(),
+            "Paste the selected bookmark into the terminal.",
+            Mode::Bookmarks.to_string().as_str(),
+            "False",
+        ]);
+        table = table.add_row(vec![
+            BareKey::Enter.to_string().as_str(),
+            "Find all bookmarks associated with the selected label.",
+            Mode::Labels.to_string().as_str(),
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{:?} {}", KeyModifier::Ctrl, Mode::Bookmarks as u32).as_str(),
+            "Switch to Bookmarks mode.",
+            "*",
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{:?} {}", KeyModifier::Ctrl, Mode::Labels as u32).as_str(),
+            "Switch to Labels mode.",
+            "*",
+            "False",
+        ]);
+        table = table.add_row(vec![
+            format!("{:?} {}", KeyModifier::Ctrl, Mode::Usage as u32).as_str(),
+            "Switch to Usage mode to view instructions.",
+            "*",
+            "False",
+        ]);
 
-    render_right_counter(begin, width, y + 3);
+        // Configurable
+        table = table.add_row(vec![
+            self.keybindings.edit.to_string().as_str(),
+            "Open the bookmark configuration file in an editor.",
+            "*",
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.reload.to_string().as_str(),
+            "Reload bookmarks. Required after modifying the configuration file.",
+            "*",
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.switch_filter_label.to_string().as_str(),
+            "Switch to label filtering mode.",
+            Mode::Bookmarks.to_string().as_str(),
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.switch_filter_id.to_string().as_str(),
+            "Switch to id filtering mode.",
+            format!("{}|{}", Mode::Bookmarks, Mode::Labels).as_str(),
+            "True",
+        ]);
+        table = table.add_row(vec![
+            self.keybindings.describe.to_string().as_str(),
+            "Show the description of the selected bookmark.",
+            Mode::Bookmarks.to_string().as_str(),
+            "True",
+        ]);
 
-    {
-        let mut number = y + 4;
+        print_table_with_coordinates(table, 2, 2, None, None);
+    }
 
-        for (i, id, value) in iterator {
-            if i < begin {
-                continue;
+    fn render_labels(&self, rows: usize, cols: usize) {
+        let iter = self
+            .labels
+            .iter()
+            .map(|(index, item)| (index, item.value.id, &item.value.name, item.indices.clone()));
+        let all_modes: Vec<Mode> = Mode::iter().collect();
+
+        render_main_menu(
+            rows,
+            cols,
+            self.labels.get_position(),
+            self.labels.len(),
+            Mode::Labels,
+            &all_modes,
+            self.filter.clone(),
+            self.filter_mode.to_string(),
+            iter,
+        );
+    }
+
+    fn render_bookmarks(&self, rows: usize, cols: usize) {
+        let iter = self.bookmarks.iter().map(|(index, item)| {
+            if self.view_desc {
+                (index, item.value.id, &item.value.desc, item.indices.clone())
+            } else {
+                (index, item.value.id, &item.value.name, item.indices.clone())
             }
-            if i > end {
-                break;
+        });
+        let all_modes: Vec<Mode> = Mode::iter().collect();
+        render_main_menu(
+            rows,
+            cols,
+            self.bookmarks.get_position(),
+            self.bookmarks.len(),
+            Mode::Bookmarks,
+            &all_modes,
+            self.filter.clone(),
+            self.filter_mode.to_string(),
+            iter,
+        );
+    }
+
+    pub(crate) fn render(&mut self, rows: usize, cols: usize) {
+        if rows < RESERVE_ROW_COUNT || cols < RESERVE_COLUMN_COUNT {
+            eprintln!(
+                "\
+                ERROR: Rendering failed. The panel is too small.\
+                The number of rows must be more than {}, but it's '{}.\
+                The number of columns must be more than {}, but it's '{}",
+                RESERVE_ROW_COUNT, rows, RESERVE_COLUMN_COUNT, cols
+            );
+            close_focus()
+        }
+        if self.error_mgr.render() {
+            return;
+        }
+        match self.mode {
+            Mode::Bookmarks => {
+                self.render_bookmarks(rows, cols);
             }
-            let text = prepare_row_text(value.clone(), id, width, selected == i);
-
-            print_text_with_coordinates(text, x, number, None, None);
-
-            number += 1;
+            Mode::Labels => {
+                self.render_labels(rows, cols);
+            }
+            Mode::Usage => {
+                self.render_usage();
+            }
         }
     }
-
-    render_all_counter(x + 2, rows, count);
-
-    if count > end {
-        render_right_counter_with_max(count - 1 - end, count, width, rows);
-    }
-}
-
-fn main_menu_size(rows: usize, cols: usize) -> (usize, usize, usize, usize) {
-    // x, y, width, height
-    let width = cols;
-    let x = 0;
-    let y = 0;
-    let height = rows.saturating_sub(RESERVE_ROW_COUNT);
-
-    (x, y, width, height)
-}
-
-fn prepare_row_text(row: String, id: usize, max_length: usize, selected: bool) -> Text {
-    let truncated_row = {
-        let formatted = format!("{}. {}", id, row);
-        if formatted.len() > max_length {
-            let truncated_len = max_length.saturating_sub(3);
-            let mut truncated_str = formatted.chars().take(truncated_len).collect::<String>();
-            truncated_str.push_str("...");
-            truncated_str
-        } else {
-            formatted
-        }
-    };
-    if selected {
-        Text::new(truncated_row).selected().color_range(0, ..)
-    } else {
-        Text::new(truncated_row)
-    }
-}
-
-pub(crate) fn render_mode(x: usize, y: usize, mode: Mode) {
-    let key_indication_text = format!("{}{}", BareKey::Left, BareKey::Right);
-    let mut shift = x + key_indication_text.chars().count() + 1;
-
-    print_text_with_coordinates(
-        Text::new(key_indication_text).color_range(3, ..).opaque(),
-        x,
-        y,
-        None,
-        None,
-    );
-
-    Mode::iter().for_each(|m| {
-        let mut t = Text::new(m.to_string());
-        if m == mode {
-            t = t.selected();
-        };
-
-        print_ribbon_with_coordinates(t, x + shift, y, None, None);
-        shift += m.to_string().len() + 4;
-    });
-}
-
-fn render_search_block(x: usize, y: usize, filter: String, filter_by: String) {
-    let filter = format!("Search (by {}): {}_", filter_by, filter.clone());
-
-    let text = Text::new(filter).color_range(BASE_COLOR, ..6);
-    print_text_with_coordinates(text, x, y, None, None);
-}
-
-// Render row with All row-counter
-fn render_all_counter(x: usize, y: usize, all: usize) {
-    let all_count = format!("All: {}", all);
-    let text = Text::new(all_count).color_range(BASE_COLOR, ..);
-    print_text_with_coordinates(text, x, y, None, None);
-}
-
-// Render row with right counter with max
-fn render_right_counter_with_max(count: usize, max_count: usize, width: usize, y: usize) {
-    if count == max_count {
-        return;
-    }
-    render_right_counter(count, width, y);
-}
-
-// Render row with right counter
-fn render_right_counter(count: usize, width: usize, y: usize) {
-    if count == 0 {
-        return;
-    }
-    let row = format!("+ {} more  ", count);
-    let x = width - row.len();
-    let text = Text::new(row).color_range(BASE_COLOR, ..);
-    print_text_with_coordinates(text, x, y, None, None);
 }
