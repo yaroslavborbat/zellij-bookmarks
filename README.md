@@ -6,19 +6,19 @@ A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly insert
 
 ## ✨ Features
 
-- **Easily create and manage command bookmarks**:  
+- **Easily create and manage command bookmarks**:
   Create, edit, and organize bookmarks with ease to manage your most common terminal commands.
 
-- **Quickly filter, view, and insert commands into the terminal**:  
+- **Quickly filter, view, and insert commands into the terminal**:
   Efficiently search and access commands or bookmarks by name or labels, allowing for fast navigation and command execution.
 
-- **Intuitive Navigation Modes**:  
+- **Intuitive Navigation Modes**:
   Switch between different navigation modes (Bookmarks or Labels) for better organization and streamlined command access.
 
-- **Advanced Templating & Dynamic Command Integration**:  
+- **Advanced Templating & Dynamic Command Integration**:
   Leverage reusable templates and dynamic interpolation with `vars`, `cmd::<command_key>`, and `bookmark::<bookmark_name>`. This allows you to define, customize, and reuse commands efficiently without repetitive configuration.
 
-- **Customizable Hotkeys**:  
+- **Customizable Hotkeys**:
   Define and adjust keybindings to better fit your workflow
 
 ---
@@ -58,7 +58,7 @@ For compatibility details, including tested versions, see [COMPATIBILITY.md](COM
    task build
    task install
    ```
-   
+
 ### Quick
 For a quick installation, run the following command to download the plugin directly:
 ```bash
@@ -94,7 +94,8 @@ shared_except "locked" {
 
 - **`cwd`**: *(REQUIRED)* - The *ABSOLUTE PATH* where your bookmarks file will be stored.
 - **`exec`**: *(default: `false`)* - If `true`, the command will execute immediately after pressing `Enter`. This can be overridden per bookmark.
-- **`ignore_case`**: *(default: `true`)* - When filtering, ignores case sensitivity in both the filter string and bookmark/label names.
+- **`fuzzy_search`**: *(default: `true`)* - When filtering, uses fuzzy search to find bookmarks/labels that match the filter string.
+- **`ignore_case`**: *(default: `false`)* - When filtering, ignores case sensitivity in both the filter string and bookmark/label names. Has no effect when `fuzzy_search` is enabled.
 - **`autodetect_filter_mode`**: *(default: `true`)* - Automatically determines the filtering mode (ID or Name) based on the entered filter string, eliminating the need for manual mode switching.
 - **`filename`**: *(default: `.zellij_bookmarks.yaml`)* - The name of the bookmarks file.
 - **`bind_edit`**: *(default: `Ctrl e`)* Keybinding to open the bookmark configuration file in an editor.
@@ -122,7 +123,7 @@ A global key-value map for variables. These variables can be used to parameteriz
   ```
 
 #### 2. **`cmds`**
-A map for frequently used commands that aren't directly insertable into the terminal. 
+A map for frequently used commands that aren't directly insertable into the terminal.
 You can include them in bookmarks by referencing them as `cmd::<command_key>`.
 
 #### 3. **`bookmarks`**
@@ -142,7 +143,7 @@ Commands within a bookmark are concatenated using the separator `&&`.
 
 ### Key Concepts
 
-- **Templating with Variables**:  
+- **Templating with Variables**:
   Variables defined in `vars` or bookmark-specific `vars` can be used in commands or bookmarks using the syntax `{{ <variable_name> }}`. Bookmark-specific variables take precedence over global ones, allowing flexible and context-specific command customization.
 
 - **Command Reuse with `cmds`**:
@@ -209,12 +210,12 @@ bookmarks:
    - A reference to the reusable command `cmd::greet`.
    - Imports all commands from **Bookmark2** using `bookmark::Bookmark2`.
 - Includes local variables that can customize command behavior.
-- Result command that would paste to terminal: 
+- Result command that would paste to terminal:
    ```bash
    echo 'This is Bookmark1' \
    && echo 'Hello, World!' \
    && ls -la /home/user \
-   && echo 'Bye Bye!' 
+   && echo 'Bye Bye!'
    ```
 
 ##### **`Bookmark2`**
