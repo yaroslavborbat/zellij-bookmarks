@@ -9,7 +9,7 @@ mod update;
 
 use crate::bookmark::Bookmark;
 use crate::config::Config;
-use crate::core::{ErrorManager, FilterMode, FilteredList};
+use crate::core::{ErrorManager, FilterMode, FilteredList, UiStyle};
 use crate::keybindings::Keybindings;
 use crate::label::Label;
 
@@ -26,6 +26,7 @@ struct State {
     mode: Mode,
     exec: bool,
     separator: String,
+    ui_style: UiStyle,
     ignore_case: bool,
     detect_filter_mode: bool,
     fuzzy_search: bool,
@@ -46,6 +47,7 @@ impl Default for State {
             mode: Default::default(),
             exec: false,
             separator: " \\\n&& ".to_string(),
+            ui_style: UiStyle::default(),
             ignore_case: true,
             detect_filter_mode: true,
             fuzzy_search: true,

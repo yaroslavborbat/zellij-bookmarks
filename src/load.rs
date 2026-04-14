@@ -9,6 +9,10 @@ use zellij_tile::prelude::*;
 
 const CONFIGURATION_EXEC: &str = "exec";
 const CONFIGURATION_SEPARATOR: &str = "separator";
+const CONFIGURATION_CHROME_COLOR: &str = "chrome_color";
+const CONFIGURATION_MATCH_COLOR: &str = "match_color";
+const CONFIGURATION_ACTIVE_ITEM_COLOR: &str = "active_item_color";
+const CONFIGURATION_SELECTED_ITEM_FRAME: &str = "selected_item_frame";
 const CONFIGURATION_IGNORE_CASE: &str = "ignore_case";
 const CONFIGURATION_FUZZY_SEARCH: &str = "fuzzy_search";
 const CONFIGURATION_AUTODETECT_FILTER_MODE: &str = "autodetect_filter_mode";
@@ -78,6 +82,43 @@ impl State {
 
         if let Some(value) = configuration.get(CONFIGURATION_SEPARATOR) {
             self.separator = value.clone();
+        }
+
+        if let Some(value) = configuration.get(CONFIGURATION_SELECTED_ITEM_FRAME) {
+            self.ui_style.selected_item_frame = value.trim().parse::<bool>().unwrap_or_else(|_| {
+                self.error_mgr.handle_error(
+                    format!("'{CONFIGURATION_SELECTED_ITEM_FRAME}' config value must be 'true' or 'false', but it's '{value}'. The true is used.")
+                );
+                true
+            })
+        }
+
+        if let Some(value) = configuration.get(CONFIGURATION_CHROME_COLOR) {
+            self.ui_style.chrome_color = value.trim().parse::<usize>().unwrap_or_else(|_| {
+                self.error_mgr.handle_error(
+                    format!("'{CONFIGURATION_CHROME_COLOR}' config value must be a number, but it's '{value}'. The 2 is used.")
+                );
+                2
+            })
+        }
+
+        if let Some(value) = configuration.get(CONFIGURATION_MATCH_COLOR) {
+            self.ui_style.match_color = value.trim().parse::<usize>().unwrap_or_else(|_| {
+                self.error_mgr.handle_error(
+                    format!("'{CONFIGURATION_MATCH_COLOR}' config value must be a number, but it's '{value}'. The 3 is used.")
+                );
+                3
+            })
+        }
+
+        if let Some(value) = configuration.get(CONFIGURATION_ACTIVE_ITEM_COLOR) {
+            self.ui_style.active_item_color =
+                value.trim().parse::<usize>().unwrap_or_else(|_| {
+                    self.error_mgr.handle_error(
+                        format!("'{CONFIGURATION_ACTIVE_ITEM_COLOR}' config value must be a number, but it's '{value}'. The 0 is used.")
+                    );
+                    0
+                })
         }
 
         if let Some(value) = configuration.get(CONFIGURATION_IGNORE_CASE) {

@@ -7,5 +7,5 @@ pub mod ui;
 pub use data::FilteredList;
 pub use filtering::{Filter, FilterMode, GenericFilter, IdGetter, LabelsGetter, NameGetter};
 pub use ui::{
-    render_main_menu, render_mode, ErrorManager, RESERVE_COLUMN_COUNT, RESERVE_ROW_COUNT,
+    render_main_menu, render_mode, ErrorManager, UiStyle, RESERVE_COLUMN_COUNT, RESERVE_ROW_COUNT,
 };

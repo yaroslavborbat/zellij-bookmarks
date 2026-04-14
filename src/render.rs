@@ -7,7 +7,7 @@ use super::{Mode, Navigation, State};
 impl State {
     fn render_usage(&self) {
         let all_modes: Vec<Mode> = Mode::iter().collect();
-        render_mode(0, 0, Mode::Usage, &all_modes);
+        render_mode(0, 0, Mode::Usage, &all_modes, &self.ui_style);
 
         let mut table = Table::new();
 
@@ -122,6 +122,7 @@ impl State {
             self.labels.len(),
             Mode::Labels,
             &all_modes,
+            &self.ui_style,
             self.filter.clone(),
             self.filter_mode.to_string(),
             iter,
@@ -144,6 +145,7 @@ impl State {
             self.bookmarks.len(),
             Mode::Bookmarks,
             &all_modes,
+            &self.ui_style,
             self.filter.clone(),
             self.filter_mode.to_string(),
             iter,
