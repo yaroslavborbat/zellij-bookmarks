@@ -94,6 +94,7 @@ shared_except "locked" {
 
 - **`cwd`**: *(REQUIRED)* - The *ABSOLUTE PATH* where your bookmarks file will be stored.
 - **`exec`**: *(default: `false`)* - If `true`, the command will execute immediately after pressing `Enter`. This can be overridden per bookmark.
+- **`separator`**: *(default: `" \\\n&& "`)* - The default separator used to join commands inside a bookmark. This can be overridden per bookmark.
 - **`fuzzy_search`**: *(default: `true`)* - When filtering, uses fuzzy search to find bookmarks/labels that match the filter string.
 - **`ignore_case`**: *(default: `false`)* - When filtering, ignores case sensitivity in both the filter string and bookmark/label names. Has no effect when `fuzzy_search` is enabled.
 - **`autodetect_filter_mode`**: *(default: `true`)* - Automatically determines the filtering mode (ID or Name) based on the entered filter string, eliminating the need for manual mode switching.
@@ -136,10 +137,11 @@ A list of bookmarks. Each bookmark has the following fields:
    - Commands imported from other bookmarks using `bookmark::<bookmark_name>`.
 - **`desc`**: *(optional)* A description of the bookmark to provide context or explanation about its purpose.
 - **`exec`**: *(optional)* A boolean flag indicating whether the commands should be executed immediately.
+- **`separator`**: *(optional)* A separator used to join commands for this bookmark. Overrides the global `separator`.
 - **`labels`**: *(optional)* A list of labels or tags associated with the bookmark.
 - **`vars`**: *(optional)* Local variables specific to the bookmark. These have a higher priority than global `vars`.
 
-Commands within a bookmark are concatenated using the separator `&&`.
+Commands within a bookmark are concatenated using the configured separator. By default it is `" \\\n&& "`.
 
 ### Key Concepts
 
@@ -149,7 +151,15 @@ Commands within a bookmark are concatenated using the separator `&&`.
 - **Command Reuse with `cmds`**:
    - Use `cmd::<command_key>` to reference predefined reusable commands from `cmds`.
    - Use `bookmark::<bookmark_name>` to include all commands from another bookmark into the current one.
-   - Commands are concatenated with `&&`, ensuring sequential execution.
+   - Commands are concatenated with the configured separator, ensuring predictable composition.
+
+### Testing
+
+Run unit tests on the host target with:
+
+```bash
+task test
+```
 
 This structure provides a modular, reusable, and powerful way to parameterize commands and configurations using simple templating and bookmark composition.
 

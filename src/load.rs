@@ -8,6 +8,7 @@ use std::{fs, io};
 use zellij_tile::prelude::*;
 
 const CONFIGURATION_EXEC: &str = "exec";
+const CONFIGURATION_SEPARATOR: &str = "separator";
 const CONFIGURATION_IGNORE_CASE: &str = "ignore_case";
 const CONFIGURATION_FUZZY_SEARCH: &str = "fuzzy_search";
 const CONFIGURATION_AUTODETECT_FILTER_MODE: &str = "autodetect_filter_mode";
@@ -73,6 +74,10 @@ impl State {
                 );
                 false
             })
+        }
+
+        if let Some(value) = configuration.get(CONFIGURATION_SEPARATOR) {
+            self.separator = value.clone();
         }
 
         if let Some(value) = configuration.get(CONFIGURATION_IGNORE_CASE) {

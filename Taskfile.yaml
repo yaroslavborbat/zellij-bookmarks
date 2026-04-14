@@ -24,6 +24,11 @@ tasks:
     cmds:
       - cargo audit
 
+  test:
+    desc: "Run tests"
+    cmds:
+      - cargo test --target x86_64-unknown-linux-gnu
+
   build:
     desc: "Build zellij-bookmarks plugin"
     cmds:

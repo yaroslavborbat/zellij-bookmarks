@@ -44,6 +44,10 @@ impl State {
         processed: &mut HashSet<String>,
     ) -> Result<String, String> {
         let mut cmds: Vec<String> = Vec::new();
+        let separator = bookmark
+            .separator
+            .clone()
+            .unwrap_or_else(|| self.separator.clone());
 
         if !processed.insert(bookmark.name.clone()) {
             return Err(format!(
@@ -81,7 +85,7 @@ impl State {
             }
         }
 
-        Ok(cmds.join(" \\\n&& "))
+        Ok(cmds.join(separator.as_str()))
     }
 
     fn gen_template_with_vars(
@@ -294,5 +298,136 @@ impl State {
         }
 
         should_render
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::State;
+    use crate::bookmark::Bookmark;
+    use crate::config::Config;
+    use std::collections::HashMap;
+
+    fn bookmark(name: &str, cmds: &[&str]) -> Bookmark {
+        Bookmark {
+            name: name.to_string(),
+            cmds: cmds.iter().map(|cmd| cmd.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn state_with_config(config: Config) -> State {
+        State {
+            config,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn gen_command_expands_nested_bookmarks() {
+        let dependency = bookmark("dep", &["echo dep-1", "echo dep-2"]);
+        let root = bookmark("root", &["echo start", "bookmark::dep", "echo end"]);
+        let state = state_with_config(Config {
+            bookmarks: vec![dependency, root.clone()],
+            ..Default::default()
+        });
+
+        let cmd = state.gen_command(&root).unwrap();
+
+        assert_eq!(
+            cmd,
+            "echo start \\\n&& echo dep-1 \\\n&& echo dep-2 \\\n&& echo end"
+        );
+    }
+
+    #[test]
+    fn gen_command_expands_named_commands() {
+        let root = bookmark("root", &["cmd::prepare", "echo ready", "cmd::finish"]);
+        let state = state_with_config(Config {
+            cmds: HashMap::from([
+                ("prepare".to_string(), "echo prepare".to_string()),
+                ("finish".to_string(), "echo finish".to_string()),
+            ]),
+            bookmarks: vec![root.clone()],
+            ..Default::default()
+        });
+
+        let cmd = state.gen_command(&root).unwrap();
+
+        assert_eq!(cmd, "echo prepare \\\n&& echo ready \\\n&& echo finish");
+    }
+
+    #[test]
+    fn gen_command_uses_separator_from_bookmark_or_global_config() {
+        let mut root = bookmark("root", &["echo one", "echo two"]);
+        root.separator = Some(" || ".to_string());
+
+        let state = State {
+            separator: " && ".to_string(),
+            config: Config {
+                bookmarks: vec![root.clone()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let cmd = state.gen_command(&root).unwrap();
+
+        assert_eq!(cmd, "echo one || echo two");
+    }
+
+    #[test]
+    fn gen_command_uses_global_separator_when_bookmark_override_is_missing() {
+        let root = bookmark("root", &["echo one", "echo two"]);
+        let state = State {
+            separator: " ~~ ".to_string(),
+            config: Config {
+                bookmarks: vec![root.clone()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let cmd = state.gen_command(&root).unwrap();
+
+        assert_eq!(cmd, "echo one ~~ echo two");
+    }
+
+    #[test]
+    fn gen_command_supports_mixed_bookmark_and_cmd_expansion() {
+        let dependency = bookmark("dep", &["cmd::prepare", "echo dep"]);
+        let root = bookmark("root", &["echo start", "bookmark::dep", "cmd::finish"]);
+        let state = state_with_config(Config {
+            cmds: HashMap::from([
+                ("prepare".to_string(), "echo prepare".to_string()),
+                ("finish".to_string(), "echo finish".to_string()),
+            ]),
+            bookmarks: vec![dependency, root.clone()],
+            ..Default::default()
+        });
+
+        let cmd = state.gen_command(&root).unwrap();
+
+        assert_eq!(
+            cmd,
+            "echo start \\\n&& echo prepare \\\n&& echo dep \\\n&& echo finish"
+        );
+    }
+
+    #[test]
+    fn gen_command_appends_newline_when_exec_is_enabled() {
+        let root = bookmark("root", &["echo run"]);
+        let state = State {
+            exec: true,
+            config: Config {
+                bookmarks: vec![root.clone()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let cmd = state.gen_command(&root).unwrap();
+
+        assert_eq!(cmd, "echo run\n");
     }
 }

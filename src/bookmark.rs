@@ -15,6 +15,7 @@ pub(crate) struct Bookmark {
     #[serde(default)]
     pub vars: HashMap<String, String>,
     pub exec: Option<bool>,
+    pub separator: Option<String>,
 }
 
 impl IdGetter for Bookmark {
