@@ -116,7 +116,7 @@ shared_except "locked" {
 
 The bookmarks configuration is a YAML file that defines your bookmarks. Here's a detailed explanation of the configuration structure and its usage.
 
-In addition to the main `filename`, the plugin also loads all `*.yaml` and `*.yml` files from `dirname`, merges them in alphabetical order, and treats the result as a single configuration. Values from later files override earlier `vars` and `cmds` entries. Bookmark names must remain unique across the whole merged config.
+In addition to the main `filename`, the plugin also loads all `*.yaml` and `*.yml` files from `dirname`, merges them in alphabetical order, and treats the result as a single configuration. Bookmark names, `vars`, and `cmds` must remain unique across the whole merged config.
 
 Every bookmark also gets an automatically managed label in the reserved `file::...` namespace based on the file it came from. For example, bookmarks from `.zellij-bookmarks.d/kubernetes.yaml` get the label `file::kubernetes`, and bookmarks from the main `filename` get `file::main`.
 
