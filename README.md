@@ -39,6 +39,7 @@ A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly insert
 - **Switch to Bookmarks Mode**: Press `Ctrl 1` to switch to Bookmarks mode.
 - **Switch to Labels Mode**: Press `Ctrl 2` to switch to Labels mode.
 - **View Usage Instructions**: Press `Ctrl 3` to switch to Usage mode and view plugin instructions.
+- **Switch to Edit Mode**: Press `Ctrl 4` to switch to Edit mode, or use `Ctrl e`.
 
 ---
 

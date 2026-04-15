@@ -4,6 +4,7 @@ This table shows the tested compatibility between `zellij-bookmarks` and Zellij 
 
 | Plugin Version  | Tested Zellij Versions | Notes             |
 |-----------------|------------------------|-------------------|
+| 0.6.0           | 0.44.1                 | Fully tested      |
 | 0.5.0           | 0.43.1, 0.44.0, 0.44.1 | Fully tested      |
 | 0.4.0           | 0.42.2, 0.43.1         | Fully tested      |
 | 0.3.0           | 0.42.1                 | Fully tested      |
