@@ -95,13 +95,14 @@ shared_except "locked" {
 - **`cwd`**: *(REQUIRED)* - The *ABSOLUTE PATH* where your bookmarks file will be stored.
 - **`exec`**: *(default: `false`)* - If `true`, the command will execute immediately after pressing `Enter`. This can be overridden per bookmark.
 - **`separator`**: *(default: `" \\\n&& "`)* - The default separator used to join commands inside a bookmark. This can be overridden per bookmark.
-- **`chrome_color`**: *(default: `2`)* - Palette index used for `Search`, `All`, `+ N more`, and mode navigation blocks.
-- **`match_color`**: *(default: `3`)* - Palette index used to highlight matched characters in filtered lists.
+- **`chrome_color`**: *(default: `2`)* - Palette index used for `Search`, `All`, `+ N more`.
+- **`match_color`**: *(default: `3`)* - Palette index used to highlight matched characters in filtered lists and mode navigation blocks.
 - **`active_item_color`**: *(default: `0`)* - Palette index used for the text color of the currently selected item.
 - **`selected_item_frame`**: *(default: `true`)* - Enables the framed selection style for the active item in lists.
 - **`fuzzy_search`**: *(default: `true`)* - When filtering, uses fuzzy search to find bookmarks/labels that match the filter string.
 - **`ignore_case`**: *(default: `false`)* - When filtering, ignores case sensitivity in both the filter string and bookmark/label names. Has no effect when `fuzzy_search` is enabled.
 - **`autodetect_filter_mode`**: *(default: `true`)* - Automatically determines the filtering mode (ID or Name) based on the entered filter string, eliminating the need for manual mode switching.
+- **`sort`**: *(default: `true`)* - Sorts bookmarks, labels, and editable config files by name and reindexes them for display and ID filtering.
 - **`filename`**: *(default: `.zellij_bookmarks.yaml`)* - The name of the bookmarks file.
 - **`dirname`**: *(default: `.zellij-bookmarks.d`)* - The name of the directory with extra YAML files to merge into the main bookmarks config.
 - **`bind_edit`**: *(default: `Ctrl e`)* Keybinding to open the edit mode and choose a config file.

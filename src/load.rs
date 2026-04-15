@@ -1,5 +1,6 @@
+use crate::bookmark::Bookmark;
 use crate::config::Config;
-use crate::core::FilteredList;
+use crate::core::{FilteredList, NameGetter};
 use crate::editable_file::EditableFile;
 use crate::keybindings::Keybindings;
 use crate::label::Label;
@@ -20,8 +21,31 @@ const CONFIGURATION_FUZZY_SEARCH: &str = "fuzzy_search";
 const CONFIGURATION_AUTODETECT_FILTER_MODE: &str = "autodetect_filter_mode";
 const CONFIGURATION_FILENAME: &str = "filename";
 const CONFIGURATION_DIRNAME: &str = "dirname";
+const CONFIGURATION_SORT: &str = "sort";
 
 use super::State;
+
+fn sort_by_name<T: NameGetter>(items: &mut [T]) {
+    items.sort_by_key(|item| item.get_name());
+}
+
+fn reindex_bookmarks(bookmarks: &mut [Bookmark]) {
+    for (i, bookmark) in bookmarks.iter_mut().enumerate() {
+        bookmark.id = i + 1;
+    }
+}
+
+fn reindex_labels(labels: &mut [Label]) {
+    for (i, label) in labels.iter_mut().enumerate() {
+        label.id = i + 1;
+    }
+}
+
+fn reindex_editable_files(files: &mut [EditableFile]) {
+    for (i, file) in files.iter_mut().enumerate() {
+        file.id = i + 1;
+    }
+}
 
 impl State {
     fn editable_files(&self) -> io::Result<Vec<EditableFile>> {
@@ -37,6 +61,11 @@ impl State {
                     path: relative_path.to_string_lossy().to_string(),
                 });
             }
+        }
+
+        if self.sort {
+            sort_by_name(&mut files);
+            reindex_editable_files(&mut files);
         }
 
         Ok(files)
@@ -132,6 +161,11 @@ impl State {
             merged_file = file;
         }
 
+        if self.sort {
+            sort_by_name(&mut config.bookmarks);
+            reindex_bookmarks(&mut config.bookmarks);
+        }
+
         let mut set = HashSet::new();
         let mut labels = Vec::new();
         let mut label_id = 1;
@@ -142,6 +176,11 @@ impl State {
                     label_id += 1;
                 };
             }
+        }
+
+        if self.sort {
+            sort_by_name(&mut labels);
+            reindex_labels(&mut labels);
         }
 
         self.labels = FilteredList::new(labels);
@@ -167,6 +206,15 @@ impl State {
                     format!("'{CONFIGURATION_EXEC}' config value must be 'true' or 'false', but it's '{value}'. The false is used.")
                 );
                 false
+            })
+        }
+
+        if let Some(value) = configuration.get(CONFIGURATION_SORT) {
+            self.sort = value.trim().parse::<bool>().unwrap_or_else(|_| {
+                self.error_mgr.handle_error(
+                    format!("'{CONFIGURATION_SORT}' config value must be 'true' or 'false', but it's '{value}'. The true is used.")
+                );
+                true
             })
         }
 
@@ -274,5 +322,72 @@ impl State {
         }
 
         subscribe(&[EventType::Key]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{reindex_bookmarks, reindex_editable_files, reindex_labels, sort_by_name};
+    use crate::bookmark::Bookmark;
+    use crate::editable_file::EditableFile;
+    use crate::label::Label;
+
+    #[test]
+    fn sort_by_name_orders_bookmarks_and_reindexes_them() {
+        let mut bookmarks = vec![
+            Bookmark {
+                id: 1,
+                name: "zeta".to_string(),
+                cmds: vec!["echo zeta".to_string()],
+                ..Default::default()
+            },
+            Bookmark {
+                id: 2,
+                name: "alpha".to_string(),
+                cmds: vec!["echo alpha".to_string()],
+                ..Default::default()
+            },
+        ];
+
+        sort_by_name(&mut bookmarks);
+        reindex_bookmarks(&mut bookmarks);
+
+        assert_eq!(bookmarks[0].name, "alpha");
+        assert_eq!(bookmarks[0].id, 1);
+        assert_eq!(bookmarks[1].name, "zeta");
+        assert_eq!(bookmarks[1].id, 2);
+    }
+
+    #[test]
+    fn sort_by_name_orders_labels_and_editable_files_and_reindexes_them() {
+        let mut labels = vec![
+            Label::new(1, "zeta".to_string()),
+            Label::new(2, "alpha".to_string()),
+        ];
+        sort_by_name(&mut labels);
+        reindex_labels(&mut labels);
+
+        assert_eq!(labels[0].name, "alpha");
+        assert_eq!(labels[0].id, 1);
+        assert_eq!(labels[1].name, "zeta");
+        assert_eq!(labels[1].id, 2);
+
+        let mut files = vec![
+            EditableFile {
+                id: 1,
+                path: "z.yml".to_string(),
+            },
+            EditableFile {
+                id: 2,
+                path: "a.yml".to_string(),
+            },
+        ];
+        sort_by_name(&mut files);
+        reindex_editable_files(&mut files);
+
+        assert_eq!(files[0].path, "a.yml");
+        assert_eq!(files[0].id, 1);
+        assert_eq!(files[1].path, "z.yml");
+        assert_eq!(files[1].id, 2);
     }
 }

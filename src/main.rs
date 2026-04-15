@@ -27,6 +27,7 @@ pub const CWD: &str = "/host";
 struct State {
     mode: Mode,
     exec: bool,
+    sort: bool,
     separator: String,
     ui_style: UiStyle,
     ignore_case: bool,
@@ -50,6 +51,7 @@ impl Default for State {
         Self {
             mode: Default::default(),
             exec: false,
+            sort: true,
             separator: " \\\n&& ".to_string(),
             ui_style: UiStyle::default(),
             ignore_case: true,
