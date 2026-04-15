@@ -55,6 +55,12 @@ impl State {
             "False",
         ]);
         table = table.add_row(vec![
+            BareKey::Enter.to_string().as_str(),
+            "Open the selected config file in an editor.",
+            Mode::Edit.to_string().as_str(),
+            "False",
+        ]);
+        table = table.add_row(vec![
             format!("{:?} {}", KeyModifier::Ctrl, Mode::Bookmarks as u32).as_str(),
             "Switch to Bookmarks mode.",
             "*",
@@ -72,11 +78,17 @@ impl State {
             "*",
             "False",
         ]);
+        table = table.add_row(vec![
+            format!("{:?} {}", KeyModifier::Ctrl, Mode::Edit as u32).as_str(),
+            "Switch to Edit mode to choose a config file.",
+            "*",
+            "False",
+        ]);
 
         // Configurable
         table = table.add_row(vec![
             self.keybindings.edit.to_string().as_str(),
-            "Open the bookmark configuration file in an editor.",
+            "Switch to Edit mode to choose a config file.",
             "*",
             "True",
         ]);
@@ -121,6 +133,27 @@ impl State {
             self.labels.get_position(),
             self.labels.len(),
             Mode::Labels,
+            &all_modes,
+            &self.ui_style,
+            self.filter.clone(),
+            self.filter_mode.to_string(),
+            iter,
+        );
+    }
+
+    fn render_edit(&self, rows: usize, cols: usize) {
+        let iter = self
+            .editable_files
+            .iter()
+            .map(|(index, item)| (index, item.value.id, &item.value.path, item.indices.clone()));
+        let all_modes: Vec<Mode> = Mode::iter().collect();
+
+        render_main_menu(
+            rows,
+            cols,
+            self.editable_files.get_position(),
+            self.editable_files.len(),
+            Mode::Edit,
             &all_modes,
             &self.ui_style,
             self.filter.clone(),
@@ -175,6 +208,9 @@ impl State {
             }
             Mode::Usage => {
                 self.render_usage();
+            }
+            Mode::Edit => {
+                self.render_edit(rows, cols);
             }
         }
     }

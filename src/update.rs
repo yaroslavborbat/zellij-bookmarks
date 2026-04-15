@@ -1,6 +1,7 @@
 use super::{bookmark, Mode, Navigation, State};
 use crate::bookmark::Bookmark;
 use crate::core::{Filter, FilterMode, GenericFilter};
+use crate::editable_file::EditableFile;
 use crate::label::Label;
 use handlebars::Handlebars;
 use std::collections::HashSet;
@@ -25,10 +26,20 @@ impl State {
         ))
     }
 
+    fn editable_file_filter(&self) -> Box<dyn Filter<EditableFile>> {
+        Box::new(GenericFilter::new(
+            self.filter_mode,
+            self.filter.clone(),
+            self.ignore_case,
+            self.fuzzy_search,
+        ))
+    }
+
     fn set_filter(&mut self) {
         match self.mode {
             Mode::Bookmarks => self.bookmarks.with_filter(self.bookmark_filter()),
             Mode::Labels => self.labels.with_filter(self.label_filter()),
+            Mode::Edit => self.editable_files.with_filter(self.editable_file_filter()),
             _ => {}
         }
     }
@@ -36,6 +47,7 @@ impl State {
     fn reset_selection(&mut self) {
         self.bookmarks.reset_selection();
         self.labels.reset_selection();
+        self.editable_files.reset_selection();
     }
 
     fn gen_template_command(
@@ -142,6 +154,10 @@ impl State {
                     self.labels.select_down();
                     should_render = true;
                 }
+                Mode::Edit => {
+                    self.editable_files.select_down();
+                    should_render = true;
+                }
                 _ => {}
             },
             BareKey::Up => match self.mode {
@@ -151,6 +167,10 @@ impl State {
                 }
                 Mode::Labels => {
                     self.labels.select_up();
+                    should_render = true;
+                }
+                Mode::Edit => {
+                    self.editable_files.select_up();
                     should_render = true;
                 }
                 _ => {}
@@ -180,7 +200,7 @@ impl State {
                 }
             }
             BareKey::Char(c) if key.has_no_modifiers() => match self.mode {
-                Mode::Bookmarks | Mode::Labels => {
+                Mode::Bookmarks | Mode::Labels | Mode::Edit => {
                     if self.detect_filter_mode && self.filter.is_empty() {
                         if c.is_ascii_digit() {
                             self.filter_mode = FilterMode::ID
@@ -212,7 +232,7 @@ impl State {
                 _ => {}
             },
             BareKey::Backspace => match self.mode {
-                Mode::Bookmarks | Mode::Labels => {
+                Mode::Bookmarks | Mode::Labels | Mode::Edit => {
                     self.filter.pop();
 
                     self.set_filter();
@@ -251,13 +271,25 @@ impl State {
 
                     should_render = true;
                 }
+                Mode::Edit => match self.editable_files.get_selected() {
+                    Some(file) => {
+                        let file = FileToOpen::new(file.path.as_str()).with_cwd(self.get_cwd());
+                        open_file_in_place(file, Default::default());
+                    }
+                    None => should_render = true,
+                },
                 _ => {}
             },
             _ => {
                 // Configurable keys
                 if self.keybindings.edit.matches(&key) {
-                    let file = FileToOpen::new(self.filename.as_str()).with_cwd(self.get_cwd());
-                    open_file_in_place(file, Default::default());
+                    self.mode = Mode::Edit;
+                    self.filter = String::new();
+                    self.filter_mode = FilterMode::Name;
+                    self.view_desc = false;
+                    self.reset_selection();
+                    self.set_filter();
+                    should_render = true;
                 } else if self.keybindings.reload.matches(&key) {
                     if let Err(e) = self.load_config() {
                         self.error_mgr.handle_error(format!(
@@ -271,6 +303,8 @@ impl State {
 
                     self.reset_selection();
 
+                    self.mode = Mode::default();
+
                     should_render = true;
                 } else if self.keybindings.switch_filter_label.matches(&key) {
                     if self.mode == Mode::Bookmarks {
@@ -280,7 +314,7 @@ impl State {
                     }
                 } else if self.keybindings.switch_filter_id.matches(&key) {
                     match self.mode {
-                        Mode::Bookmarks | Mode::Labels => {
+                        Mode::Bookmarks | Mode::Labels | Mode::Edit => {
                             self.filter_mode = self.filter_mode.switch_to(FilterMode::ID);
                             self.set_filter();
                             should_render = true;

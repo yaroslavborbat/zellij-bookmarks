@@ -1,9 +1,11 @@
 use crate::config::Config;
 use crate::core::FilteredList;
+use crate::editable_file::EditableFile;
 use crate::keybindings::Keybindings;
 use crate::label::Label;
 use std::collections::{BTreeMap, HashSet};
 use std::io::{Read, Write};
+use std::path::Path;
 use std::{fs, io};
 use zellij_tile::prelude::*;
 
@@ -17,10 +19,35 @@ const CONFIGURATION_IGNORE_CASE: &str = "ignore_case";
 const CONFIGURATION_FUZZY_SEARCH: &str = "fuzzy_search";
 const CONFIGURATION_AUTODETECT_FILTER_MODE: &str = "autodetect_filter_mode";
 const CONFIGURATION_FILENAME: &str = "filename";
+const CONFIGURATION_DIRNAME: &str = "dirname";
 
 use super::State;
 
 impl State {
+    fn editable_files(&self) -> io::Result<Vec<EditableFile>> {
+        let mut files = vec![EditableFile {
+            id: 1,
+            path: self.filename.clone(),
+        }];
+
+        for path in self.list_extra_config_paths()? {
+            if let Ok(relative_path) = path.strip_prefix(self.get_cwd()) {
+                files.push(EditableFile {
+                    id: files.len() + 1,
+                    path: relative_path.to_string_lossy().to_string(),
+                });
+            }
+        }
+
+        Ok(files)
+    }
+
+    pub(crate) fn refresh_editable_files(&mut self) -> io::Result<Vec<EditableFile>> {
+        let files = self.editable_files()?;
+        self.editable_files = FilteredList::new(files.clone());
+        Ok(files)
+    }
+
     fn create_config_if_not_exists(&self) -> io::Result<()> {
         let path = self.get_path();
         if !path.exists() {
@@ -29,18 +56,81 @@ impl State {
             let mut file = fs::File::create(&path)?;
             file.write_all(serialized.as_bytes())?;
         }
+
+        let dir_path = self.get_dir_path();
+        if !dir_path.exists() {
+            fs::create_dir_all(dir_path)?;
+        }
+
         Ok(())
     }
 
-    pub(crate) fn load_config(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let path = self.get_path();
-
-        let mut file = fs::File::open(&path)?;
+    fn read_config(path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
+        let mut file = fs::File::open(path)?;
 
         let mut content = String::new();
         file.read_to_string(&mut content)?;
 
-        let config: Config = serde_yaml::from_str(&content)?;
+        Ok(serde_yaml::from_str(&content)?)
+    }
+
+    fn read_file_config(&self, file: &EditableFile) -> Result<Config, Box<dyn std::error::Error>> {
+        let mut config = Self::read_config(&self.editable_file_path(file))?;
+        let managed_label = file.managed_label(&self.filename, &self.dirname);
+
+        for bookmark in &mut config.bookmarks {
+            bookmark.add_managed_label(managed_label.clone());
+        }
+
+        Ok(config)
+    }
+
+    fn editable_file_path(&self, file: &EditableFile) -> std::path::PathBuf {
+        self.get_cwd().join(file.path.as_str())
+    }
+
+    fn list_extra_config_paths(&self) -> io::Result<Vec<std::path::PathBuf>> {
+        let dir_path = self.get_dir_path();
+        if !dir_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut extra_files = fs::read_dir(&dir_path)?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()?;
+        extra_files.retain(|path| path.is_file() && Self::is_yaml_file(path));
+        extra_files.sort();
+
+        Ok(extra_files)
+    }
+
+    fn is_yaml_file(path: &Path) -> bool {
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| matches!(ext, "yaml" | "yml"))
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn load_config(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let files = self.refresh_editable_files().map_err(io::Error::other)?;
+        let mut files_iter = files.iter();
+        let Some(first_file) = files_iter.next() else {
+            return Err(io::Error::other("No editable files found").into());
+        };
+
+        let mut config = self.read_file_config(first_file)?;
+        let mut merged_file = first_file;
+
+        for file in files_iter {
+            let file_config = self.read_file_config(file)?;
+            config.merge(file_config).map_err(|err| {
+                io::Error::other(format!(
+                    "Failed to merge config files '{}' and '{}': {}",
+                    merged_file.path, file.path, err
+                ))
+            })?;
+            merged_file = file;
+        }
 
         let mut set = HashSet::new();
         let mut labels = Vec::new();
@@ -154,15 +244,23 @@ impl State {
             }
         }
 
+        if let Some(value) = configuration.get(CONFIGURATION_DIRNAME) {
+            if !value.is_empty() {
+                self.dirname = value.clone();
+            }
+        }
+
         if let Err(e) = self.create_config_if_not_exists() {
-            self.error_mgr
-                .handle_crit_error(format!("Failed to create file '{}': {}.", self.filename, e));
+            self.error_mgr.handle_crit_error(format!(
+                "Failed to initialize config storage '{}', '{}': {}.",
+                self.filename, self.dirname, e
+            ));
         }
 
         if let Err(e) = self.load_config() {
             self.error_mgr.handle_error(format!(
-                "Failed to load config file '{}': {}.",
-                self.filename, e
+                "Failed to load config from main file '{}' and extra config dir '{}': {}.",
+                self.filename, self.dirname, e
             ));
         }
 

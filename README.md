@@ -31,7 +31,7 @@ A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly insert
 - **Remove Filter Symbol**: Use `Backspace` to delete the last character from the filter input.
 - **Switch Modes**: Press `Ctrl Left` or `Ctrl Right` to switch between plugin modes.
 - **Exit**: Press `Esc` or `Ctrl c` to exit the plugin.
-- **Edit Bookmarks**: Press `Ctrl e` to open the bookmark configuration file in an editor.
+- **Edit Bookmarks**: Press `Ctrl e` to open the edit mode, choose a configuration file, and open it in an editor.
 - **Reload Bookmarks**: Press `Ctrl r` to reload bookmarks after modifying the configuration file.
 - **Switch to Label Filtering Mode**: Press `Ctrl l` to enable label filtering mode. This feature is only available in `Bookmarks` mode.
 - **Switch to ID Filtering Mode**: Press `Ctrl i` to enable ID filtering mode. This feature is available in both `Bookmarks` and `Labels` modes.
@@ -103,7 +103,8 @@ shared_except "locked" {
 - **`ignore_case`**: *(default: `false`)* - When filtering, ignores case sensitivity in both the filter string and bookmark/label names. Has no effect when `fuzzy_search` is enabled.
 - **`autodetect_filter_mode`**: *(default: `true`)* - Automatically determines the filtering mode (ID or Name) based on the entered filter string, eliminating the need for manual mode switching.
 - **`filename`**: *(default: `.zellij_bookmarks.yaml`)* - The name of the bookmarks file.
-- **`bind_edit`**: *(default: `Ctrl e`)* Keybinding to open the bookmark configuration file in an editor.
+- **`dirname`**: *(default: `.zellij-bookmarks.d`)* - The name of the directory with extra YAML files to merge into the main bookmarks config.
+- **`bind_edit`**: *(default: `Ctrl e`)* Keybinding to open the edit mode and choose a config file.
 - **`bind_reload`**: *(default: `Ctrl r`)* Keybinding to reload bookmarks.
 - **`bind_switch_filter_label`**: *(default: `Ctrl l`)* Keybinding to switch to label filtering mode.
 - **`bind_switch_filter_id`**: *(default: `Ctrl i`)* Keybinding to switch to id filtering mode.
@@ -112,6 +113,10 @@ shared_except "locked" {
 ### Bookmarks Configuration
 
 The bookmarks configuration is a YAML file that defines your bookmarks. Here's a detailed explanation of the configuration structure and its usage.
+
+In addition to the main `filename`, the plugin also loads all `*.yaml` and `*.yml` files from `dirname`, merges them in alphabetical order, and treats the result as a single configuration. Values from later files override earlier `vars` and `cmds` entries. Bookmark names must remain unique across the whole merged config.
+
+Every bookmark also gets an automatically managed label in the reserved `file::...` namespace based on the file it came from. For example, bookmarks from `.zellij-bookmarks.d/kubernetes.yaml` get the label `file::kubernetes`, and bookmarks from the main `filename` get `file::main`.
 
 ### Configuration Structure
 

@@ -35,3 +35,11 @@ impl LabelsGetter for Bookmark {
         self.labels.clone()
     }
 }
+
+impl Bookmark {
+    pub(crate) fn add_managed_label(&mut self, label: String) {
+        if !self.labels.contains(&label) {
+            self.labels.push(label);
+        }
+    }
+}

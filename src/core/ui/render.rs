@@ -136,7 +136,7 @@ pub fn render_mode<T: std::fmt::Display + PartialEq + Copy>(
 
     print_text_with_coordinates(
         Text::new(key_indication_text)
-            .color_range(ui_style.chrome_color, ..)
+            .color_range(ui_style.match_color, ..)
             .opaque(),
         x,
         y,

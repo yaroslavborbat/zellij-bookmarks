@@ -1,6 +1,7 @@
 mod bookmark;
 mod config;
 mod core;
+mod editable_file;
 mod keybindings;
 mod label;
 mod load;
@@ -10,6 +11,7 @@ mod update;
 use crate::bookmark::Bookmark;
 use crate::config::Config;
 use crate::core::{ErrorManager, FilterMode, FilteredList, UiStyle};
+use crate::editable_file::EditableFile;
 use crate::keybindings::Keybindings;
 use crate::label::Label;
 
@@ -34,10 +36,12 @@ struct State {
     filter_mode: FilterMode,
     filter: String,
     filename: String,
+    dirname: String,
     config: Config,
     keybindings: Keybindings,
     bookmarks: FilteredList<Bookmark>,
     labels: FilteredList<Label>,
+    editable_files: FilteredList<EditableFile>,
     error_mgr: ErrorManager,
 }
 
@@ -55,10 +59,12 @@ impl Default for State {
             filter_mode: Default::default(),
             filter: "".to_string(),
             filename: ".zellij_bookmarks.yaml".to_string(),
+            dirname: ".zellij-bookmarks.d".to_string(),
             config: Default::default(),
             keybindings: Default::default(),
             bookmarks: Default::default(),
             labels: Default::default(),
+            editable_files: Default::default(),
             error_mgr: ErrorManager::new(),
         }
     }
@@ -71,6 +77,7 @@ enum Mode {
     Bookmarks = 1,
     Labels = 2,
     Usage = 3,
+    Edit = 4,
 }
 
 trait Navigation {
@@ -87,11 +94,11 @@ impl Navigation for Mode {
 
     fn prev(&self) -> Mode {
         let prev = (*self as u32).saturating_sub(1);
-        Mode::try_from(prev).unwrap_or(Mode::Usage)
+        Mode::try_from(prev).unwrap_or(Mode::Edit)
     }
 
     fn iter() -> impl Iterator<Item = Self> {
-        (1..=3).filter_map(|v| Mode::try_from(v).ok())
+        (1..=4).filter_map(|v| Mode::try_from(v).ok())
     }
 }
 
@@ -101,6 +108,7 @@ impl fmt::Display for Mode {
             Self::Bookmarks => "Bookmarks",
             Self::Labels => "Labels",
             Self::Usage => "Usage",
+            Self::Edit => "Edit",
         };
         write!(f, "{}", name)
     }
@@ -113,6 +121,10 @@ impl State {
 
     fn get_path(&self) -> path::PathBuf {
         self.get_cwd().join(self.filename.as_str())
+    }
+
+    fn get_dir_path(&self) -> path::PathBuf {
+        self.get_cwd().join(self.dirname.as_str())
     }
 }
 
