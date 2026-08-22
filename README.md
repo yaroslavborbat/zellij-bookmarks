@@ -1,3 +1,5 @@
+
+
 # zellij-bookmarks
 
 A [Zellij](https://zellij.dev) plugin for creating, managing, and quickly inserting command bookmarks into the terminal.
@@ -51,7 +53,7 @@ For compatibility details, including tested versions, see [COMPATIBILITY.md](COM
 
 1. Install Rust and Cargo if you haven't already. Follow the [installation guide here](https://www.rust-lang.org/tools/install).
 
-   Additionally, install the `wasm32-wasip1` target by following the [documentation here](https://doc.rust-lang.org/nightly/rustc/platform-support/wasm32-wasip1.html).
+   Additionally, install the `wasm32-wasip1` target by following the [documentation here](https://doc.rust-lang.org/nightly/rustc/platform-support/wasm32-wasip1.html). Also install [Task](https://taskfile.dev) if you haven't already.
 2. Clone the repository, build, and install the plugin by running the following commands:
    ```bash
    git clone https://github.com/yaroslavborbat/zellij-bookmarks.git
